@@ -140,6 +140,20 @@ describe("Onboarding API", () => {
       .expect(200);
   }
 
+  async function waitForPendingValidation(sessionId: string): Promise<void> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const session = await prisma.onboardingSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      });
+      if (session.validationStatus === "pending") {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    throw new Error("Validation did not enter pending state");
+  }
+
   it("returns the same session for the trusted partner", async () => {
     const first = await api()
       .post("/api/onboarding/sessions")
@@ -181,6 +195,186 @@ describe("Onboarding API", () => {
 
     expect(firstGoLive.body.session.status).toBe("COMPLETED");
     expect(secondGoLive.body.partner.id).toBe(firstGoLive.body.partner.id);
+  });
+
+  it("invalidates a successful result when credentials change", async () => {
+    const sessionId = await createSession();
+    await saveDetails(sessionId, "valid_key");
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(200);
+    const validated = await prisma.onboardingSession.findUniqueOrThrow({
+      where: { id: sessionId },
+    });
+
+    const changed = await api()
+      .put(`/api/onboarding/sessions/${sessionId}/details`)
+      .send({
+        companyName: "Example Partner",
+        providerAccountId: "replacement-account",
+        providerApiKey: "partial_key",
+      })
+      .expect(200);
+
+    expect(changed.body).toMatchObject({
+      status: "READY_TO_VALIDATE",
+      currentStep: "validation",
+      validation: {
+        status: "not_started",
+        items: [],
+        warnings: [],
+        reason: null,
+        partialAcceptedAt: null,
+      },
+    });
+    const persisted = await prisma.onboardingSession.findUniqueOrThrow({
+      where: { id: sessionId },
+    });
+    expect(persisted.credentialsVersion).toBe(
+      validated.credentialsVersion + 1,
+    );
+    expect(persisted.validationCredentialsVersion).toBeNull();
+    expect(persisted.providerItems).toEqual([]);
+    expect(persisted.validationWarnings).toEqual([]);
+    expect(persisted.validationReason).toBeNull();
+    expect(persisted.partialAcceptedAt).toBeNull();
+  });
+
+  it("discards an in-flight result after credentials change", async () => {
+    const sessionId = await createSession();
+    await saveDetails(sessionId, "timeout_key");
+
+    const validationPromise = api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .then((response) => response);
+    await waitForPendingValidation(sessionId);
+
+    await api()
+      .put(`/api/onboarding/sessions/${sessionId}/details`)
+      .send({
+        companyName: "Example Partner",
+        providerAccountId: "new-account",
+        providerApiKey: "valid_key",
+      })
+      .expect(200);
+
+    const staleResponse = await validationPromise;
+    expect(staleResponse.status).toBe(409);
+    expect(staleResponse.body.error.code).toBe("STALE_VALIDATION_RESULT");
+
+    const persisted = await prisma.onboardingSession.findUniqueOrThrow({
+      where: { id: sessionId },
+    });
+    expect(persisted.providerAccountId).toBe("new-account");
+    expect(persisted.providerApiKey).toBe("valid_key");
+    expect(persisted.status).toBe("READY_TO_VALIDATE");
+    expect(persisted.validationStatus).toBe("not_started");
+    expect(persisted.providerItems).toEqual([]);
+  });
+
+  it("retries a flaky Provider without duplicating items", async () => {
+    const sessionId = await createSession();
+    await saveDetails(sessionId, "flaky_key");
+
+    const unavailable = await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(200);
+    expect(unavailable.body.validation.status).toBe("unavailable");
+
+    const valid = await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(200);
+    const itemIds = valid.body.validation.items.map(
+      (item: { id: string }) => item.id,
+    );
+
+    expect(valid.body.validation.status).toBe("valid");
+    expect(itemIds).toHaveLength(2);
+    expect(new Set(itemIds).size).toBe(itemIds.length);
+  });
+
+  it("handles concurrent go-live requests with one Partner", async () => {
+    const sessionId = await createSession();
+    await saveDetails(sessionId, "valid_key");
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(200);
+
+    const [first, second] = await Promise.all([
+      api().post(`/api/onboarding/sessions/${sessionId}/go-live`),
+      api().post(`/api/onboarding/sessions/${sessionId}/go-live`),
+    ]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(first.body.partner.id).toBe(second.body.partner.id);
+    expect(
+      await prisma.partner.count({
+        where: { onboardingSessionId: sessionId },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.onboardingSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      }),
+    ).toMatchObject({ status: "COMPLETED" });
+  });
+
+  it("rejects invalid and terminal transitions without changing state", async () => {
+    const sessionId = await createSession();
+
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(409);
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/accept-partial`)
+      .expect(409);
+    expect(
+      await prisma.onboardingSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      }),
+    ).toMatchObject({
+      status: "DETAILS_REQUIRED",
+      validationStatus: "not_started",
+    });
+
+    await saveDetails(sessionId, "valid_key");
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(200);
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/go-live`)
+      .expect(200);
+
+    await api()
+      .put(`/api/onboarding/sessions/${sessionId}/details`)
+      .send({
+        companyName: "Changed Company",
+        providerAccountId: "changed-account",
+        providerApiKey: "partial_key",
+      })
+      .expect(409);
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(409);
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/accept-partial`)
+      .expect(409);
+
+    expect(
+      await prisma.onboardingSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      }),
+    ).toMatchObject({
+      status: "COMPLETED",
+      companyName: "Example Partner",
+      validationStatus: "valid",
+    });
+    expect(
+      await prisma.partner.count({
+        where: { onboardingSessionId: sessionId },
+      }),
+    ).toBe(1);
   });
 
   it("resets the same session and removes its activated partner", async () => {

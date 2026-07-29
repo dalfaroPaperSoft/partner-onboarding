@@ -2242,3 +2242,182 @@ was changed to watch mode so the running API picks up route changes.
 
 **Pending** — The focused test-gap analysis is ready; no new tests or README
 changes were requested yet.
+
+---
+
+## 2026-07-29 — Entry 0032
+
+### Initial prompt
+
+> update the Readme with Contracts test command
+
+### AI response
+
+> Updated the README verification section with the shared-contract commands:
+>
+> ```bash
+> cd ../../packages/contracts
+> npm run build
+> npm test
+> ```
+>
+> The path follows the existing command sequence from `apps/web`, so the complete API, frontend, and contracts verification block can be run in order.
+
+### Decision
+
+**Accepted** — The contracts build and test commands were added to the README.
+
+---
+
+## 2026-07-29 — Entry 0033
+
+### Initial prompt
+
+> [{
+> 	"resource": "/d:/onboarding/partner-onboarding/apps/web/tsconfig.node.json",
+> 	"owner": "typescript",
+> 	"severity": 8,
+> 	"message": "Option 'allowImportingTsExtensions' can only be used when one of 'noEmit', 'emitDeclarationOnly', or 'rewriteRelativeImportExtensions' is set.",
+> 	"source": "ts",
+> 	"startLineNumber": 7,
+> 	"startColumn": 35,
+> 	"endLineNumber": 7,
+> 	"endColumn": 39,
+> 	"origin": "extHost1"
+> }]
+
+### AI response
+
+> The repository configuration is already correct. The current `apps/web/tsconfig.node.json` does not contain `allowImportingTsExtensions` and explicitly sets:
+>
+> ```json
+> {
+>   "compilerOptions": {
+>     "skipLibCheck": true,
+>     "module": "ESNext",
+>     "moduleResolution": "Bundler",
+>     "noEmit": true
+>   },
+>   "include": ["vite.config.ts"]
+> }
+> ```
+>
+> I also searched the frontend project, and no other configuration enables `allowImportingTsExtensions`. `npm run typecheck` passes.
+>
+> The diagnostic is from a stale or unsaved VS Code buffer. To clear it:
+>
+> 1. Open `apps/web/tsconfig.node.json` and discard any unsaved version if it still shows `allowImportingTsExtensions`.
+> 2. Open the Command Palette.
+> 3. Run **TypeScript: Restart TS Server**.
+> 4. If it remains, run **Developer: Reload Window**.
+>
+> No repository change is needed.
+
+### Decision
+
+**Accepted** — The checked-in TypeScript configuration is valid; the reported
+diagnostic is stale editor state.
+
+---
+
+## 2026-07-29 — Entry 0034
+
+### Initial prompt
+
+> Include the test cases propused above
+
+### AI response
+
+> Added all eight focused test cases from the test-gap analysis.
+>
+> New backend coverage:
+>
+> 1. Changing credentials after successful validation increments the credential version and clears the prior result.
+> 2. Changing credentials during an in-flight Provider request causes the old response to return `409 STALE_VALIDATION_RESULT` without overwriting new state.
+> 3. Retrying `flaky_key` transitions from unavailable to valid and stores each item exactly once.
+> 4. Two concurrent go-live requests return the same Partner and persist only one Partner row.
+> 5. Validation before details, invalid partial acceptance, and completed-session mutations return `409` without changing persisted state.
+>
+> New frontend coverage:
+>
+> 6. The complete valid wizard path: Details → Validation → Review → Go live → Complete.
+> 7. Invalid credentials display their reason and recover through editing/replacing credentials.
+> 8. A persisted pending session exposes Retry and advances from the retry response.
+>
+> The README now explicitly states that API integration tests require the PostgreSQL Compose service to be running. It already contains commands for the API, frontend, and contracts suites.
+>
+> Final verification:
+>
+> - API: **19 tests passed**.
+> - Frontend: **9 tests passed**.
+> - Shared contracts: **4 tests passed**.
+> - Total: **32 tests passed**.
+> - API strict TypeScript build: passed.
+> - Frontend strict TypeScript check and production build: passed.
+> - Contracts strict TypeScript build: passed.
+>
+> These additions target state transitions, validation failure/recovery, concurrency, idempotency, and the complete wizard flow; no low-value coverage-only tests were added.
+
+### Decision
+
+**Accepted** — All eight proposed high-value tests were implemented and the
+three suites pass with 32 tests total.
+
+---
+
+## 2026-07-29 — Entry 0035
+
+### Initial prompt
+
+> Update the README to include a section explaining why I chose the following technology stack:
+>
+> Backend
+>
+> **Express**	A lightweight framework that stays out of the way. It lets me focus on the business logic instead of framework-specific patterns, which is ideal for a time-boxed exercise like this.
+> **Prisma**	Simplifies database access and migrations while providing type-safe queries. It allowed me to model the onboarding entities quickly without writing a lot of boilerplate.
+> **PostgreSQL**	A reliable relational database with excellent transaction support. Since this project requires consistent state transitions and an atomic go-live process, PostgreSQL was a natural choice.
+> **Zod**	Used to validate incoming requests and external provider responses at runtime. It also integrates nicely with TypeScript by inferring types from the validation schemas, reducing duplication.
+> **Vitest**	A fast and modern testing framework with an API similar to Jest. It made it easy to write and run unit tests without adding unnecessary complexity.
+> **Supertest**	Used to test the Express API by sending HTTP requests directly to the application. It makes integration testing straightforward and helps verify the complete onboarding flow without needing a separate server instance.
+>
+> Frontend
+>
+> **Vite**	I chose Vite because it's quick to set up and provides a very fast development experience. Since this project has a tight time limit, it lets me spend more time building features instead of configuring the project.
+> **TanStack Query**	TanStack Query makes it easy to communicate with the backend. It handles loading states, errors, and data updates, which is useful when creating a session, validating credentials, and moving through the onboarding flow.
+> **React Hook Form**	React Hook Form keeps forms simple and easy to manage. It works well for collecting the company name, Provider account ID, and API key without requiring a lot of boilerplate code.
+> **Zod**	Zod is used to validate user input before sending it to the backend. Since the same schemas can also be shared between the frontend and backend, it helps keep validation consistent across the application.
+> **React Testing Library**	React Testing Library focuses on testing the application the way a user interacts with it. It allows me to verify that the onboarding flow behaves correctly, from filling out the form to completing the go-live process.
+
+### AI response
+
+> Updated the README with a new **Technology choices** section near the top of the document.
+>
+> It contains separate backend and frontend tables explaining the rationale for:
+>
+> - Express, Prisma, PostgreSQL, Zod, Vitest, and Supertest;
+> - Vite, TanStack Query, React Hook Form, Zod, and React Testing Library.
+>
+> The section connects each choice to the project's actual constraints and implementation: the 4–6 hour time box, transactional state transitions, runtime validation and shared types, server-state recovery, low-boilerplate forms, HTTP integration tests, and user-oriented wizard tests.
+
+### Decision
+
+**Accepted** — The technology-stack rationale was added to the README.
+
+---
+
+## 2026-07-29 — Entry 0036
+
+### Initial prompt
+
+> change this part on the Readme "The session is intentionally resumable and COMPLETED is terminal. To manually exercise another Provider path after completing onboarding, use a fresh local database or intentionally reset the local development data before starting again." and include thta we can use the reset session button
+
+### AI response
+
+> Updated the README guidance.
+>
+> It now explains that `COMPLETED` remains terminal for the normal onboarding workflow, but another Provider path can be tested with the **Reset session** button in the application header. It also clarifies that reset preserves the session ID, clears the session and linked Partner data, and returns the wizard to the initial Details step.
+
+### Decision
+
+**Accepted** — The obsolete fresh-database guidance was replaced with the
+current Reset session workflow.

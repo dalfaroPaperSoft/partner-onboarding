@@ -126,6 +126,74 @@ describe("Onboarding wizard", () => {
     );
   });
 
+  it("completes the valid wizard flow from details to confirmation", async () => {
+    const user = userEvent.setup();
+    const readyToValidate = session({
+      status: "READY_TO_VALIDATE",
+      currentStep: "validation",
+      details: {
+        companyName: "Example Partner",
+        providerAccountId: "account-123",
+        hasProviderApiKey: true,
+      },
+      allowedActions: ["save_details", "validate"],
+    });
+    const readyToGoLive = session({
+      status: "READY_TO_GO_LIVE",
+      currentStep: "review",
+      details: readyToValidate.details,
+      validation: {
+        status: "valid",
+        items: [{ id: "item-1", name: "Primary item" }],
+        warnings: [],
+        reason: null,
+        partialAcceptedAt: null,
+      },
+      allowedActions: ["save_details", "retry_validation", "go_live"],
+    });
+    const completed = session({
+      ...readyToGoLive,
+      status: "COMPLETED",
+      currentStep: "complete",
+      completedAt: timestamp,
+      allowedActions: [],
+    });
+    mockResponses(session(), readyToValidate, readyToGoLive, {
+      session: completed,
+      partner: {
+        id: "ddba10a7-5559-4d3f-91e9-0d7f2dc26431",
+        companyName: "Example Partner",
+        status: "LIVE",
+        onboardingSessionId: sessionId,
+        createdAt: timestamp,
+      },
+    });
+
+    renderApp();
+    await user.type(
+      await screen.findByLabelText("Company name"),
+      "Example Partner",
+    );
+    await user.type(
+      screen.getByLabelText("Provider account ID"),
+      "account-123",
+    );
+    await user.type(screen.getByLabelText("Provider API key"), "valid_key");
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Validate connection" }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Go live" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Example Partner is live",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("shows retry recovery for an unavailable Provider", async () => {
     mockResponses(
       session({
@@ -158,6 +226,104 @@ describe("Onboarding wizard", () => {
     expect(
       screen.getByRole("button", { name: "Retry validation" }),
     ).toBeEnabled();
+  });
+
+  it("recovers from invalid credentials through the edit flow", async () => {
+    const user = userEvent.setup();
+    const invalid = session({
+      status: "INTEGRATION_INVALID",
+      currentStep: "validation",
+      validationStatus: "invalid",
+      details: {
+        companyName: "Example Partner",
+        providerAccountId: "old-account",
+        hasProviderApiKey: true,
+      },
+      validation: {
+        status: "invalid",
+        items: [],
+        warnings: [],
+        reason: "Invalid Provider credentials",
+        partialAcceptedAt: null,
+      },
+      allowedActions: ["save_details", "retry_validation"],
+    });
+    const corrected = session({
+      status: "READY_TO_VALIDATE",
+      currentStep: "validation",
+      details: {
+        companyName: "Example Partner",
+        providerAccountId: "new-account",
+        hasProviderApiKey: true,
+      },
+      allowedActions: ["save_details", "validate"],
+    });
+    mockResponses(invalid, corrected);
+
+    renderApp();
+    expect(
+      await screen.findByText("Invalid Provider credentials"),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Edit details" }));
+    const accountInput = screen.getByLabelText("Provider account ID");
+    await user.clear(accountInput);
+    await user.type(accountInput, "new-account");
+    await user.type(screen.getByLabelText("Provider API key"), "valid_key");
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Validate connection" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByText("Invalid Provider credentials"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("retries a persisted pending validation after reload", async () => {
+    const user = userEvent.setup();
+    const pending = session({
+      status: "READY_TO_VALIDATE",
+      currentStep: "validation",
+      validationStatus: "pending",
+      details: {
+        companyName: "Example Partner",
+        providerAccountId: "account-123",
+        hasProviderApiKey: true,
+      },
+      validation: {
+        status: "pending",
+        items: [],
+        warnings: [],
+        reason: null,
+        partialAcceptedAt: null,
+      },
+      allowedActions: ["save_details", "retry_validation"],
+    });
+    const valid = session({
+      status: "READY_TO_GO_LIVE",
+      currentStep: "review",
+      details: pending.details,
+      validation: {
+        status: "valid",
+        items: [{ id: "item-1", name: "Primary item" }],
+        warnings: [],
+        reason: null,
+        partialAcceptedAt: null,
+      },
+      allowedActions: ["save_details", "retry_validation", "go_live"],
+    });
+    mockResponses(pending, valid);
+
+    renderApp();
+    const retry = await screen.findByRole("button", {
+      name: "Retry validation",
+    });
+    expect(retry).toBeEnabled();
+    await user.click(retry);
+
+    expect(
+      await screen.findByRole("heading", { name: "Review and go live" }),
+    ).toBeInTheDocument();
   });
 
   it("accepts a partial result and advances to review", async () => {

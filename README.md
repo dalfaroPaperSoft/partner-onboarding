@@ -3,6 +3,32 @@
 A time-boxed full-stack exercise implementing a resumable, three-step partner
 onboarding flow with a mock external Provider.
 
+## Technology choices
+
+The stack was selected to maximize type safety and workflow correctness while
+keeping setup and framework overhead appropriate for a 4–6 hour exercise.
+
+### Backend
+
+| Technology | Why I chose it |
+| --- | --- |
+| **Express** | A lightweight framework that stays out of the way. It lets me focus on business logic instead of framework-specific patterns, which is ideal for a time-boxed exercise like this. |
+| **Prisma** | Simplifies database access and migrations while providing type-safe queries. It allowed me to model the onboarding entities quickly without writing a lot of boilerplate. |
+| **PostgreSQL** | A reliable relational database with excellent transaction support. Since this project requires consistent state transitions and an atomic go-live process, PostgreSQL was a natural choice. |
+| **Zod** | Used to validate incoming requests and external Provider responses at runtime. It also integrates with TypeScript by inferring types from validation schemas, reducing duplication. |
+| **Vitest** | A fast, modern testing framework with an API similar to Jest. It made it easy to write and run tests without adding unnecessary complexity. |
+| **Supertest** | Used to test the Express API by sending HTTP requests directly to the application. It makes integration testing straightforward and helps verify the complete onboarding flow without requiring a separately managed API process. |
+
+### Frontend
+
+| Technology | Why I chose it |
+| --- | --- |
+| **Vite** | Quick to set up and provides a fast development experience. Given the tight time limit, it lets me spend more time building features instead of configuring the project. |
+| **TanStack Query** | Makes communication with the backend straightforward. It handles loading states, errors, cache updates, and refetching, which is useful when creating or resuming a session, validating credentials, and moving through the onboarding flow. |
+| **React Hook Form** | Keeps forms simple and easy to manage. It works well for collecting the company name, Provider account ID, and API key without requiring a lot of boilerplate. |
+| **Zod** | Validates user input before it is sent to the backend. Sharing Zod schemas and inferred types between the frontend and backend keeps validation and the API contract consistent. |
+| **React Testing Library** | Focuses on testing the application the way a user interacts with it. It verifies that the onboarding wizard behaves correctly from filling out details through validation, recovery paths, and go-live completion. |
+
 ## Prerequisites
 
 ### Node.js
@@ -155,6 +181,8 @@ Run PostgreSQL, the API, and the frontend in separate terminals.
 
 Useful verification commands:
 
+API integration tests require the PostgreSQL Compose service to be running.
+
 ```bash
 cd apps/api
 npm run build
@@ -163,12 +191,18 @@ npm test
 cd ../web
 npm run build
 npm test
+
+cd ../../packages/contracts
+npm run build
+npm test
 ```
 
-The session is intentionally resumable and `COMPLETED` is terminal. To manually
-exercise another Provider path after completing onboarding, use a fresh local
-database or intentionally reset the local development data before starting
-again.
+The session is intentionally resumable and `COMPLETED` is terminal for the
+normal onboarding workflow. To manually exercise another Provider path, use the
+testing-only **Reset session** button in the application header. After
+confirmation, it clears the current session and linked Partner data while
+preserving the same session ID, then returns the wizard to the initial Details
+step.
 
 ## Mock Provider contract
 
