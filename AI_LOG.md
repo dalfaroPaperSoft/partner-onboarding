@@ -1251,3 +1251,33 @@ Compose configuration were created.
 
 **Accepted** — PostgreSQL was started and the first Prisma migration was
 created, applied, and verified against the agreed final state machine.
+
+---
+
+## 2026-07-29 — Entry 0014
+
+### Initial prompt
+
+> ok, can we create a README.md file and add the logic propused for the Mock Provider, i mean the rules related to the request apy_key and response accoridng to the api key
+
+### AI response
+
+> Created the root `README.md` with the agreed Mock Provider HTTP contract.
+>
+> It documents:
+>
+> - the request route and Bearer-token format;
+> - deterministic behavior for `valid_key`, `partial_key`, `invalid_key`, `unavailable_key`, `timeout_key`, and `flaky_key`;
+> - the behavior for missing or unknown keys;
+> - example HTTP requests and response payloads;
+> - how each response updates onboarding and validation state;
+> - partial-warning acceptance;
+> - timeout and flaky retry behavior;
+> - Zod response validation; and
+> - stale-response protection using credential versions and validation attempts.
+>
+> The README also makes clear that API keys must never be returned or logged and that retries atomically replace Provider result data rather than appending duplicate items.
+
+### Decision
+
+**Accepted** — The Mock Provider rules were added to the project README.
