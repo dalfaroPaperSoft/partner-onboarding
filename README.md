@@ -179,22 +179,50 @@ Run PostgreSQL, the API, and the frontend in separate terminals.
    Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local API,
    so no browser CORS configuration is needed.
 
-Useful verification commands:
+## Tests
 
-API integration tests require the PostgreSQL Compose service to be running.
+The test suites focus on the parts that carry the most risk: state transitions,
+Provider failure and retry behavior, concurrency and idempotency, shared API
+contracts, and the complete user-facing wizard flow.
+
+API integration tests require the PostgreSQL Compose service to be running:
+
+```bash
+cd apps/api
+npm test
+```
+
+Run the frontend wizard tests:
+
+```bash
+cd apps/web
+npm test
+```
+
+Run the shared-contract tests:
+
+```bash
+cd packages/contracts
+npm test
+```
+
+The current suites contain 32 focused tests: 19 API tests, 9 frontend tests,
+and 4 shared-contract tests.
+
+### Build and type-check verification
+
+Each package also provides a build command that performs strict TypeScript
+validation. The frontend command additionally creates the production bundle.
 
 ```bash
 cd apps/api
 npm run build
-npm test
 
 cd ../web
 npm run build
-npm test
 
 cd ../../packages/contracts
 npm run build
-npm test
 ```
 
 The session is intentionally resumable and `COMPLETED` is terminal for the
@@ -415,3 +443,81 @@ or a newer retry.
 
 Each accepted Provider response atomically replaces stored items, warnings, and
 reason fields. Retries never append duplicate items.
+
+## Key assumptions and design decisions
+
+Given the 4–6 hour time limit, I focused on building a small but complete
+vertical slice instead of trying to implement every possible feature.
+
+One of the first decisions was to assume a **single trusted partner**, as
+allowed by the exercise. Instead of creating a new onboarding session every
+time, the API creates or resumes the same session. This keeps the workflow
+simple while still demonstrating persistence, resumability, idempotency, and
+state management. Supporting multiple users and multiple sessions would have
+required authentication and authorization, which are explicitly out of scope.
+
+I also decided to model onboarding as a **state machine**. The backend owns all
+state transitions and the frontend simply renders the current state returned by
+the API. This avoids duplicating workflow logic across both applications and
+makes recovery after page reloads straightforward.
+
+For the database, I intentionally kept the schema small. Provider items and
+validation warnings are stored as JSONB instead of normalized tables. While a
+normalized model would be more appropriate for reporting or complex queries,
+using JSONB significantly reduced implementation time and still satisfied the
+requirements for persistence, retries, and resumability.
+
+Another design decision was to implement the Mock Provider as a **real HTTP
+API** inside the same Express application. Although it runs in the same process,
+the onboarding service communicates with it through HTTP, allowing me to test
+timeouts, retries, HTTP errors, and response validation without introducing
+additional infrastructure.
+
+Finally, I used a shared contracts package with Zod and TypeScript so both the
+frontend and backend rely on the same request and response definitions. This
+reduces duplicated models and keeps both sides synchronized as the API evolves.
+
+## What I deliberately deferred
+
+Several features were intentionally left out because they would have added
+complexity without providing much value for the objectives of this exercise.
+
+I did not implement authentication or multi-user support since the exercise
+explicitly allows assuming a single trusted partner. Similarly, I chose not to
+support multiple onboarding sessions per partner because it would require
+ownership, authorization rules, and additional UI flows.
+
+I also kept the Provider integration synchronous. Introducing background jobs,
+queues, or asynchronous processing would make sense in a production
+environment, but it would significantly increase the amount of infrastructure
+required for this project.
+
+Provider items were intentionally not normalized into separate tables. The
+current implementation is sufficient for the onboarding workflow, and
+normalization would only become valuable if those items needed to be queried
+independently or reported on.
+
+Finally, I focused testing on the areas that matter most—state transitions,
+retry behavior, idempotency, and the onboarding flow—instead of trying to
+maximize code coverage.
+
+## What I would do with another day
+
+With another day, my first priority would be implementing authentication and
+replacing the hardcoded trusted partner with real user identities. From there,
+I would add support for multiple onboarding sessions while ensuring users can
+only access their own data.
+
+I would also move the Mock Provider into a separate service to better simulate
+an external dependency and add end-to-end tests covering the complete
+onboarding journey.
+
+From a production perspective, I would encrypt Provider API keys instead of
+storing them directly, improve logging and observability, and add a CI pipeline
+to automatically run formatting, type checking, tests, and builds on every
+change.
+
+Overall, my goal for this submission was to prioritize correctness, consistency,
+and maintainability over completeness. Rather than building many partially
+implemented features, I preferred delivering a smaller solution where the core
+workflow behaves reliably and can be extended incrementally.
