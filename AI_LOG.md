@@ -1281,3 +1281,175 @@ created, applied, and verified against the agreed final state machine.
 ### Decision
 
 **Accepted** — The Mock Provider rules were added to the project README.
+
+---
+
+## 2026-07-29 — Entry 0015
+
+### Initial prompt
+
+> ok, now we will the contracts according to the state machine propused and the the types needed related to the rules and logic
+
+### AI response
+
+> Created the shared contracts package at `packages/contracts`.
+>
+> It now provides:
+>
+> - workflow schemas and inferred types for the six session statuses, validation statuses, wizard steps, and allowed actions;
+> - a strict Provider discriminated union for `valid`, `partial`, and `invalid` results;
+> - the separate HTTP `503` Provider error payload;
+> - request validation for session IDs and saving details;
+> - safe onboarding-session snapshots containing `hasProviderApiKey` instead of the secret;
+> - response contracts for create/resume, get session, save details, validation, partial acceptance, and go-live;
+> - the live Partner contract; and
+> - stable API error codes and field-error payloads.
+>
+> Important contract decisions:
+>
+> - `providerApiKey` is optional on a details update so an existing saved key can be retained, but the backend must require one when credentials have never been saved.
+> - All response objects are strict, so accidentally adding `providerApiKey` to a session response fails validation.
+> - Partial Provider responses require at least one warning.
+> - Provider transport failures are not part of the `200` response union.
+> - Contracts contain no Prisma-generated types, keeping frontend and backend coupled only to the API.
+>
+> The package exports its TypeScript source directly for the monorepo and uses Zod `3.25.76`, TypeScript `5.9.2`, and Vitest `3.2.4`.
+>
+> Verification passed:
+>
+> - TypeScript strict no-emit build: passed.
+> - Vitest: 4 tests passed.
+>
+> The dependency installation reported one critical npm advisory. I did not run an external advisory lookup or force an upgrade; dependency review remains a separate follow-up.
+
+### Decision
+
+**Accepted** — The contracts package was implemented and verified against the
+agreed workflow and Provider rules.
+
+---
+
+## 2026-07-29 — Entry 0016
+
+### Initial prompt
+
+> btw, include in the readme what is the version of software that we are using for Node js we are using v24.16.0 and also include a explaination that we need to have the docker desktop as a big requirement
+
+### AI response
+
+> Updated the root `README.md` with a new prerequisites section covering:
+>
+> - the required Node.js version: **`v24.16.0`**;
+> - a command and expected output for verifying Node.js;
+> - Docker Desktop as a required local-development dependency;
+> - why Docker Desktop is necessary: PostgreSQL runs through Compose, and migrations, API development, and database-backed tests depend on it;
+> - Docker and Compose verification commands;
+> - the command to start PostgreSQL; and
+> - how to confirm that the database container is healthy on port `5432`.
+>
+> The README also clarifies that only PostgreSQL is containerized; the API and frontend run in the local Node.js environment.
+
+### Decision
+
+**Accepted** — The Node.js version and Docker Desktop requirement were added to
+the README.
+
+---
+
+## 2026-07-29 — Entry 0017
+
+### Initial prompt
+
+> ok, now we will continue with the backend api, using the rules and information that we know like the state machine and types propused, we need to create the routes, repositories, services, controllers for the onboarding API and the Mock Provider
+>
+> Remember this
+>
+> | API key | HTTP behavior | Response |
+> | --- | --- | --- |
+> | `valid_key` | `200` immediately | `{ "status": "valid", "items": [...] }` |
+> | `partial_key` | `200` immediately | `{ "status": "partial", "items": [...], "warnings": [...] }` |
+> | `invalid_key` | `200` immediately | `{ "status": "invalid", "reason": "Invalid Provider credentials" }` |
+> | `unavailable_key` | `503` immediately | `{ "error": "Provider temporarily unavailable" }` |
+> | `timeout_key` | Delay beyond the client timeout | The client aborts and maps it to `unavailable` |
+> | `flaky_key` | First call `503`, later calls `200 valid` | Demonstrates a successful safe retry |
+>
+> and this one
+>
+> | Current session status | Event | Next session status | Validation status | Additional change |
+> | --- | --- | --- | --- | --- |
+> | No session | Create session | `DETAILS_REQUIRED` | `not_started` | Empty details |
+> | `DETAILS_REQUIRED` | Save valid details | `READY_TO_VALIDATE` | `not_started` | Save credentials |
+> | Any state except `COMPLETED` | Change credentials | `READY_TO_VALIDATE` | `not_started` | Increment credential version and clear prior result |
+> | Any validation/go-live state | Start or retry validation | `READY_TO_VALIDATE` | `pending` | Increment validation attempt; clear partial acceptance |
+> | `READY_TO_VALIDATE` | Provider returns valid | `READY_TO_GO_LIVE` | `valid` | Persist items |
+> | `READY_TO_VALIDATE` | Provider returns partial | `READY_TO_VALIDATE` | `partial` | Persist items/warnings; acceptance remains null |
+> | `READY_TO_VALIDATE` | Accept partial warnings | `READY_TO_GO_LIVE` | `partial` | Set `partial_accepted_at` |
+> | `READY_TO_VALIDATE` | Provider returns invalid | `INTEGRATION_INVALID` | `invalid` | Persist reason |
+> | `READY_TO_VALIDATE` | Provider is unavailable | `INTEGRATION_UNAVAILABLE` | `unavailable` | Persist safe transient reason |
+> | `READY_TO_GO_LIVE` | Go live | `COMPLETED` | Preserve `valid` or `partial` | Create partner atomically |
+> | `COMPLETED` | Any mutation | `COMPLETED` | Unchanged | Reject with `409` |
+
+### AI response
+
+> Implemented the backend API layers for onboarding and the Mock Provider.
+>
+> Available onboarding routes:
+>
+> ```text
+> POST /api/onboarding/sessions
+> GET  /api/onboarding/sessions/:sessionId
+> PUT  /api/onboarding/sessions/:sessionId/details
+> POST /api/onboarding/sessions/:sessionId/validation
+> POST /api/onboarding/sessions/:sessionId/accept-partial
+> POST /api/onboarding/sessions/:sessionId/go-live
+> ```
+>
+> Mock Provider route:
+>
+> ```text
+> GET /mock-provider/accounts/:accountId/items
+> Authorization: Bearer <apiKey>
+> ```
+>
+> The implementation includes:
+>
+> - Express application and server entry points;
+> - Zod environment and request validation;
+> - centralized async and error handling;
+> - Prisma-backed onboarding repository;
+> - onboarding service, controller, routes, and safe response mapper;
+> - Mock Provider repository, service, controller, and routes;
+> - a real HTTP Provider client with timeout and malformed-response handling;
+> - deterministic valid, partial, invalid, unavailable, timeout, flaky, and unknown-key behavior;
+> - credential-version and validation-attempt protection against stale responses;
+> - explicit partial-warning acceptance;
+> - write-only API keys in session responses;
+> - row locking, guard rechecks, partner upsert, and session completion in one go-live transaction; and
+> - idempotent repeated go-live returning the same Partner.
+>
+> State behavior follows the agreed machine: partial stays `READY_TO_VALIDATE` until accepted, invalid and unavailable use their dedicated session statuses, credential replacement clears prior validation, and completed sessions reject mutations with `409`.
+>
+> Verification passed:
+>
+> - API TypeScript strict build: passed.
+> - Shared-contract TypeScript strict build: passed.
+> - API tests: **11 passed**.
+> - Shared-contract tests: **4 passed**.
+> - Same-process smoke check: `/health` returned `ok`; `valid_key` returned two items.
+>
+> The API tests cover valid activation, duplicate go-live, partial acceptance, invalid credentials, HTTP `503`, timeout mapping, successful flaky retry, unknown keys, and API-key omission from responses. Test-created database records are removed by their exact session IDs.
+>
+> Run locally with:
+>
+> ```bash
+> cd apps/api
+> npm run start
+> ```
+>
+> PostgreSQL must already be running through Docker Compose. Dependency installation currently reports four npm advisories (three high and one critical); I did not force potentially breaking upgrades.
+
+### Decision
+
+**Accepted** — The requested backend route, repository, service, and controller
+layers were implemented and verified against the agreed state machine and Mock
+Provider rules.

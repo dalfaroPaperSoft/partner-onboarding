@@ -3,6 +3,59 @@
 A time-boxed full-stack exercise implementing a resumable, three-step partner
 onboarding flow with a mock external Provider.
 
+## Prerequisites
+
+### Node.js
+
+This project uses **Node.js `v24.16.0`**. Use this exact version to keep local
+development and test behavior consistent.
+
+Verify the active version:
+
+```bash
+node --version
+```
+
+Expected output:
+
+```text
+v24.16.0
+```
+
+### Docker Desktop
+
+**Docker Desktop is a required dependency for local development.** The
+application itself runs in the local Node.js environment, but PostgreSQL runs
+in a container defined by `docker-compose.yml`. Without a running Docker
+engine, the database cannot start and Prisma migrations, API development, and
+database-backed tests will fail.
+
+Install Docker Desktop for the local operating system, start it, and wait until
+the Docker engine reports that it is running. Docker Compose v2 is included
+with current Docker Desktop installations.
+
+Verify Docker and Compose:
+
+```bash
+docker --version
+docker compose version
+```
+
+Start PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
+
+Confirm that the database is healthy:
+
+```bash
+docker compose ps
+```
+
+The `postgres` service should report `healthy` and expose PostgreSQL on local
+port `5432`.
+
 ## Mock Provider contract
 
 The Mock Provider runs as an HTTP route in the API server. The onboarding
