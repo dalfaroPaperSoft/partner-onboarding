@@ -218,6 +218,27 @@ Wait until the `postgres` service reports `healthy`.
 
 ### 5. Apply migrations and generate Prisma Client
 
+> [!IMPORTANT]
+> Do not run Prisma commands until `apps/api/.env` exists and contains
+> `DATABASE_URL`. Prisma loads the schema from `apps/api/prisma/schema.prisma`
+> and resolves `env("DATABASE_URL")` from the API environment. A root
+> `.env.example` by itself is not enough.
+
+From the repository root, create the file if it is missing:
+
+```bash
+cp .env.example apps/api/.env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example apps/api/.env
+Test-Path apps/api/.env
+```
+
+`Test-Path` should return `True`. Then run the migration from `apps/api`:
+
 ```bash
 cd apps/api
 npm run db:migrate
@@ -227,29 +248,41 @@ npm run db:generate
 The migration command creates the schema in the PostgreSQL container and records
 both migrations in Prisma's migration history.
 
+If Prisma reports `P1012: Environment variable not found: DATABASE_URL`, stop
+and create `apps/api/.env` using the commands above before retrying. The
+additional Windows `UV_HANDLE_CLOSING` assertion can appear after this
+configuration failure; fixing `DATABASE_URL` resolves the underlying problem.
+
 ### 6. Start the API
 
-From `apps/api`:
+Open a new terminal for the API and navigate to the repository root. Then change
+to the API directory before starting it:
 
 ```bash
+cd apps/api
 npm run dev
 ```
 
-The API listens on `http://127.0.0.1:3000`. Keep this terminal running. The
-development command watches backend source files and restarts the process when
-routes or services change.
+Confirm that this terminal is in `partner-onboarding/apps/api`, not the
+repository root or `apps/web`. The API listens on `http://127.0.0.1:3000`. Keep
+this terminal running. The development command watches backend source files and
+restarts the process when routes or services change.
 
 ### 7. Start the frontend
 
-In a second terminal:
+Leave the API terminal running. Open a second, separate terminal for the
+frontend and navigate to the repository root. Then change to the frontend
+directory:
 
 ```bash
 cd apps/web
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local API, so
-no browser CORS configuration is needed.
+Confirm that this second terminal is in `partner-onboarding/apps/web`. Keep it
+running alongside the API terminal, then open `http://127.0.0.1:5173`. Vite
+proxies `/api` requests to the API on port `3000`, so both terminals must remain
+active and no browser CORS configuration is needed.
 
 ### Local ports
 

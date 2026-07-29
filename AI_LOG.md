@@ -2545,3 +2545,97 @@ top-level README section.
 **Accepted** — Fresh-clone documentation gaps were corrected and the setup
 instructions now cover installation, configuration, startup, verification, and
 common failures.
+
+---
+
+## 2026-07-29 — Entry 0040
+
+### Initial prompt
+
+> Before running the migrations, could you an alert or comment to indicate that we need the .env
+> seeing this error
+>
+> Prisma schema loaded from prisma\schema.prisma
+> Error: Prisma schema validation - (get-config wasm)
+> Error code: P1012
+> error: Environment variable not found: DATABASE_URL.
+>   -->  prisma\schema.prisma:7
+>    |
+>  6 |   provider = "postgresql"
+>  7 |   url      = env("DATABASE_URL")
+>    |
+>
+> Validation Error Count: 1
+> [Context: getConfig]
+>
+> Prisma CLI Version : 6.16.0
+> Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94
+
+### AI response
+
+> Added a prominent **Important** alert immediately before the Prisma migration commands.
+>
+> It now states that:
+>
+> - `apps/api/.env` must exist before running Prisma;
+> - the file must contain `DATABASE_URL`;
+> - the root `.env.example` alone is not loaded by Prisma from `apps/api`;
+> - macOS/Linux/Git Bash and PowerShell copy commands can create the file;
+> - PowerShell users can verify it with `Test-Path apps/api/.env`; and
+> - `P1012` means the environment file must be fixed before retrying.
+>
+> The README also notes that the Windows `UV_HANDLE_CLOSING` assertion is a secondary failure after the missing environment variable; creating `apps/api/.env` resolves the underlying configuration problem.
+
+### Decision
+
+**Accepted** — A migration preflight warning and explicit `P1012` recovery
+instructions were added to the README.
+
+---
+
+## 2026-07-29 — Entry 0041
+
+### Initial prompt
+
+> on these 2 sections indicate that we need to use a separate terminal and be sure that is in the correct folder
+> 6. Start the API
+> From apps/api:
+>
+> npm run dev
+> The API listens on http://127.0.0.1:3000. Keep this terminal running. The development command watches backend source files and restarts the process when routes or services change.
+>
+> 7. Start the frontend
+> In a second terminal:
+>
+> cd apps/web
+> npm run dev
+> Open http://127.0.0.1:5173. Vite proxies /api requests to the local API, so no browser CORS configuration is needed.
+>
+> Local ports
+> Service	Port
+> PostgreSQL	5432
+> Express API	3000
+> Vite frontend	5173
+> All three ports must be available. If one is already in use, stop the conflicting local service before starting this project.
+>
+> On readme
+
+### AI response
+
+> Updated both README startup sections.
+>
+> They now explicitly instruct the developer to:
+>
+> - open one dedicated terminal for the API;
+> - start from the repository root and run `cd apps/api`;
+> - confirm the terminal is in `partner-onboarding/apps/api`;
+> - keep the API terminal running;
+> - open a second, separate terminal for the frontend;
+> - start from the repository root and run `cd apps/web`;
+> - confirm the second terminal is in `partner-onboarding/apps/web`; and
+> - keep both terminals active because Vite proxies frontend API calls to port `3000`.
+
+### Decision
+
+**Accepted** — API and frontend startup instructions now clearly identify
+separate terminals and their required working directories.
