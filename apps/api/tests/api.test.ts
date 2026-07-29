@@ -5,11 +5,19 @@ import { HttpProviderClient } from "../src/integrations/provider/provider.client
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/plugins/prisma.js";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+} from "vitest";
 
 let providerServer: Server;
 let providerBaseUrl: string;
 const createdSessionIds: string[] = [];
+const testPartnerKey = "integration-test-trusted-partner";
 
 beforeAll(async () => {
   providerServer = createApp({ mockTimeoutDelayMs: 100 }).listen(0);
@@ -21,6 +29,18 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await removeCreatedSessions();
+  await prisma.$disconnect();
+  await new Promise<void>((resolve, reject) => {
+    providerServer.close((error) => (error ? reject(error) : resolve()));
+  });
+});
+
+afterEach(async () => {
+  await removeCreatedSessions();
+});
+
+async function removeCreatedSessions(): Promise<void> {
   if (createdSessionIds.length > 0) {
     await prisma.partner.deleteMany({
       where: { onboardingSessionId: { in: createdSessionIds } },
@@ -28,13 +48,9 @@ afterAll(async () => {
     await prisma.onboardingSession.deleteMany({
       where: { id: { in: createdSessionIds } },
     });
+    createdSessionIds.length = 0;
   }
-
-  await prisma.$disconnect();
-  await new Promise<void>((resolve, reject) => {
-    providerServer.close((error) => (error ? reject(error) : resolve()));
-  });
-});
+}
 
 describe("Mock Provider HTTP contract", () => {
   it.each([
@@ -98,13 +114,14 @@ describe("Onboarding API", () => {
       createApp({
         providerBaseUrl,
         providerTimeoutMs: 50,
+        trustedPartnerKey: testPartnerKey,
       }),
     );
 
   async function createSession(): Promise<string> {
     const response = await api()
       .post("/api/onboarding/sessions")
-      .expect(201);
+      .expect(200);
     createdSessionIds.push(response.body.id);
     return response.body.id as string;
   }
@@ -122,6 +139,24 @@ describe("Onboarding API", () => {
       })
       .expect(200);
   }
+
+  it("returns the same session for the trusted partner", async () => {
+    const first = await api()
+      .post("/api/onboarding/sessions")
+      .expect(200);
+    createdSessionIds.push(first.body.id);
+
+    const second = await api()
+      .post("/api/onboarding/sessions")
+      .expect(200);
+
+    expect(second.body.id).toBe(first.body.id);
+    expect(
+      await prisma.onboardingSession.count({
+        where: { partnerKey: testPartnerKey },
+      }),
+    ).toBe(1);
+  });
 
   it("completes the valid flow and makes go-live idempotent", async () => {
     const sessionId = await createSession();
@@ -176,6 +211,26 @@ describe("Onboarding API", () => {
     await api()
       .post(`/api/onboarding/sessions/${sessionId}/go-live`)
       .expect(200);
+  });
+
+  it("allows retry after reloading a persisted pending validation", async () => {
+    const sessionId = await createSession();
+    await saveDetails(sessionId, "valid_key");
+    await prisma.onboardingSession.update({
+      where: { id: sessionId },
+      data: {
+        status: "READY_TO_VALIDATE",
+        validationStatus: "pending",
+        validationAttempt: { increment: 1 },
+      },
+    });
+
+    const resumed = await api()
+      .get(`/api/onboarding/sessions/${sessionId}`)
+      .expect(200);
+
+    expect(resumed.body.validation.status).toBe("pending");
+    expect(resumed.body.allowedActions).toContain("retry_validation");
   });
 
   it.each([

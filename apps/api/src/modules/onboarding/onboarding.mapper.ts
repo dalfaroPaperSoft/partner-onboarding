@@ -77,7 +77,5 @@ function allowedActions(session: SessionWithPartner): AllowedAction[] {
     return [...actions, "validate"];
   }
 
-  return session.validationStatus === "pending"
-    ? actions
-    : [...actions, "retry_validation"];
+  return [...actions, "retry_validation"];
 }

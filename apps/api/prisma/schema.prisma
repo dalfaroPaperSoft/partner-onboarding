@@ -9,6 +9,7 @@ datasource db {
 
 model OnboardingSession {
   id                           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  partnerKey                   String    @unique @default("trusted-partner") @map("partner_key")
   companyName                  String?   @map("company_name")
   providerAccountId            String?   @map("provider_account_id")
   providerApiKey               String?   @map("provider_api_key")

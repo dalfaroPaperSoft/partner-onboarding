@@ -13,7 +13,7 @@ export class OnboardingController {
     _request: Request,
     response: Response,
   ): Promise<void> => {
-    response.status(201).json(await this.service.createSession());
+    response.json(await this.service.createSession());
   };
 
   getSession = async (request: Request, response: Response): Promise<void> => {

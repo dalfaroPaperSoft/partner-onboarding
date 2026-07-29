@@ -12,6 +12,7 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   PROVIDER_BASE_URL: z.string().url().optional(),
   PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(500),
+  TRUSTED_PARTNER_KEY: z.string().min(1).default("trusted-partner"),
 });
 
 export const env = EnvSchema.parse(process.env);

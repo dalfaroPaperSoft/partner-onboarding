@@ -17,6 +17,7 @@ type AppOptions = {
   providerBaseUrl?: string;
   providerTimeoutMs?: number;
   mockTimeoutDelayMs?: number;
+  trustedPartnerKey?: string;
 };
 
 export function createApp(options: AppOptions = {}): Express {
@@ -36,9 +37,12 @@ export function createApp(options: AppOptions = {}): Express {
     options.providerTimeoutMs ?? env.PROVIDER_TIMEOUT_MS,
   );
   const onboardingRepository = new OnboardingRepository(prisma);
+  // Future multi-session support should obtain this key from authenticated
+  // request context instead of application configuration.
   const onboardingService = new OnboardingService(
     onboardingRepository,
     providerClient,
+    options.trustedPartnerKey ?? env.TRUSTED_PARTNER_KEY,
   );
   const onboardingController = new OnboardingController(onboardingService);
 

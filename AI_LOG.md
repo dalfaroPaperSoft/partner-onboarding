@@ -1453,3 +1453,327 @@ the README.
 **Accepted** — The requested backend route, repository, service, and controller
 layers were implemented and verified against the agreed state machine and Mock
 Provider rules.
+
+---
+
+## 2026-07-29 — Entry 0018
+
+### Initial prompt
+
+> wait something if not correct, according a test doing the post /api/onboarding/sessions is createing a new session everytime. At the moment, i dont need manage multiple sessions and we can accomplish the first version of the project using this "assume a single trusted partner; a hardcoded identity is fine."
+>
+> Fix it and also include a comment for future improvement and feature the multisessions on the Readme file
+
+### AI response
+
+> Fixed. `POST /api/onboarding/sessions` is now an atomic create-or-resume operation for the hardcoded trusted identity instead of creating a new row on every request.
+>
+> Changes:
+>
+> - Added migration `20260729000200_single_trusted_partner`.
+> - Added `onboarding_sessions.partner_key` with a unique database index.
+> - Configured the first-version identity as `trusted-partner`.
+> - Changed the repository to use Prisma `upsert` by `partner_key`.
+> - Repeated POST requests now return HTTP `200` with the same session ID.
+> - The behavior survives API and PostgreSQL restarts because identity and session state are persisted.
+> - Added a code comment explaining that authenticated request identity should replace the configured key when multi-session support is introduced.
+> - Updated tests to use a separate trusted identity so they cannot affect a developer's local session.
+>
+> The migration safely handles databases that already contain sessions: the earliest existing session receives `trusted-partner`, while additional legacy rows receive unique `legacy-<session-id>` identities instead of being deleted.
+>
+> The README now includes:
+>
+> - how the single trusted-partner identity works;
+> - why repeated session POSTs resume the same row;
+> - multi-partner and multi-session support as an explicit future improvement;
+> - authenticated ownership and session scoping requirements;
+> - the option for a partial unique index when only one active session per partner is allowed; and
+> - authorization and isolation tests needed for that feature.
+>
+> Verification passed:
+>
+> - Second Prisma migration applied successfully.
+> - Prisma reports the database schema is up to date.
+> - Prisma Client regenerated successfully.
+> - TypeScript strict build passed.
+> - API tests: **12 passed**, including repeated create-or-resume and a database count asserting only one row for the trusted test identity.
+
+### Decision
+
+**Accepted** — Session creation was corrected to persist and resume one session
+for the hardcoded trusted partner; future multi-session support was documented.
+
+---
+
+## 2026-07-29 — Entry 0019
+
+### Initial prompt
+
+> ok, now we will continue with frontend, but first, could you resume what are the possibles paths/flow at least to accomplish the stable functionality? based on the rules propused and also the recovery when it is needed
+
+### AI response
+
+> For a stable first frontend, the server snapshot must remain the source of truth. On application startup, call `POST /api/onboarding/sessions`; it atomically creates or resumes the single trusted partner's session. Render `currentStep`, data, validation state, and actions from that response.
+>
+> ## Main paths
+>
+> | Path | State sequence | Frontend behavior |
+> | --- | --- | --- |
+> | First visit | `DETAILS_REQUIRED / not_started` | Show Details form |
+> | Valid Provider | `READY_TO_VALIDATE → pending → READY_TO_GO_LIVE / valid → COMPLETED` | Validate, review items, go live |
+> | Partial accepted | `READY_TO_VALIDATE → pending → READY_TO_VALIDATE / partial → READY_TO_GO_LIVE / partial → COMPLETED` | Show items/warnings, require acceptance, review, go live |
+> | Partial not accepted | `READY_TO_VALIDATE / partial` | Stay on validation; allow retry or credential replacement |
+> | Invalid credentials | `pending → INTEGRATION_INVALID / invalid` | Show reason; allow credential correction |
+> | Provider unavailable | `pending → INTEGRATION_UNAVAILABLE / unavailable` | Show transient message and Retry |
+> | Already completed | `COMPLETED` | Show success confirmation; do not show mutation actions |
+>
+> ## Flow 1: initial details
+>
+> 1. Resume/create the session.
+> 2. If `currentStep = details`, show `companyName`, `providerAccountId`, and `providerApiKey`.
+> 3. Submit with `PUT /sessions/:id/details`.
+> 4. On success, replace the entire local session snapshot with the response.
+> 5. The API key is never returned. Use `hasProviderApiKey` to show “credentials saved”; omit the API key on later company-name-only edits.
+>
+> Recovery:
+>
+> - Keep form validation errors on screen for `422`.
+> - If the save request loses its response, refetch/resume the session before retrying. Identical detail submission is safe.
+> - Changing `accountId` or `apiKey` intentionally resets earlier validation and returns the user to validation.
+>
+> ## Flow 2: successful validation
+>
+> ```text
+> READY_TO_VALIDATE / not_started
+>   -> POST validation
+> READY_TO_VALIDATE / pending
+>   -> valid
+> READY_TO_GO_LIVE / valid
+> ```
+>
+> Show a pending indicator while the request is in flight. On success, show the returned items and advance to Review. Do not advance based only on the button click.
+>
+> ## Flow 3: partial validation
+>
+> ```text
+> READY_TO_VALIDATE / pending
+>   -> partial
+> READY_TO_VALIDATE / partial / partialAcceptedAt = null
+>   -> POST accept-partial
+> READY_TO_GO_LIVE / partial / partialAcceptedAt = timestamp
+> ```
+>
+> Show both items and warnings. Provide:
+>
+> - **Accept warnings and continue**, which calls the acceptance endpoint;
+> - **Retry validation**; and
+> - **Edit credentials**.
+>
+> There is no separate “reject” mutation. Not accepting simply leaves the session on validation.
+>
+> ## Flow 4: invalid credentials
+>
+> Show `validation.reason`, keep the user on validation, and provide an Edit credentials action. Saving changed credentials clears the invalid result and moves to `READY_TO_VALIDATE / not_started`. The user can then validate again.
+>
+> ## Flow 5: unavailable, timeout, or flaky Provider
+>
+> Show a transient—not credential-related—error and a Retry button. Retry calls the same validation endpoint:
+>
+> ```text
+> INTEGRATION_UNAVAILABLE / unavailable
+>   -> retry
+> READY_TO_VALIDATE / pending
+>   -> next Provider result
+> ```
+>
+> `flaky_key` demonstrates recovery: the first request becomes unavailable and the second becomes valid.
+>
+> ## Flow 6: review and go live
+>
+> Review is available only for:
+>
+> - `valid`; or
+> - `partial` with `partialAcceptedAt` set.
+>
+> Submit `POST /sessions/:id/go-live`. Disable the button only while the local request is active. If it succeeds, render Complete.
+>
+> Recovery:
+>
+> - If the response is lost, resume/refetch the session.
+> - If it is already `COMPLETED`, treat the operation as successful.
+> - Otherwise retry go-live; the endpoint returns the same Partner and cannot create a duplicate.
+>
+> ## Reload and uncertain-request recovery
+>
+> For every reload or ambiguous network failure:
+>
+> 1. Call create/resume again.
+> 2. Replace cached workflow state with the returned server snapshot.
+> 3. Navigate from `currentStep`.
+> 4. Never infer success from stale browser state.
+>
+> Suggested rendering:
+>
+> | Server snapshot | Screen |
+> | --- | --- |
+> | `DETAILS_REQUIRED` | Details |
+> | Validation `not_started`, `pending`, `invalid`, `unavailable`, or unaccepted `partial` | Validate integration |
+> | `READY_TO_GO_LIVE` | Review and go live |
+> | `COMPLETED` | Completion |
+>
+> A `409 STALE_VALIDATION_RESULT` means another retry or credential update won. Refetch and render the newer session instead of showing a terminal error.
+>
+> ## One backend contract gap to fix before the wizard
+>
+> The repository safely allows retry from a persisted `pending` state, but the current session mapper does not include `retry_validation` in `allowedActions` while pending. That matters if the API process stops after persisting `pending` or the browser reloads during validation.
+>
+> The stable rule should be:
+>
+> - backend snapshot exposes `retry_validation` for `pending`;
+> - frontend hides/disables Retry while its own validation request is actively in flight;
+> - after reload, no local request exists, so Retry is immediately available.
+>
+> With that small correction, the minimum frontend needs only four render modes—Details, Validation, Review, and Complete—and recovery always reduces to refetching the authoritative session and safely retrying the relevant idempotent command.
+
+### Decision
+
+**Pending** — The frontend flow and recovery map is proposed; the pending-state
+retry contract gap should be accepted and corrected before implementation.
+
+### Decision update — 2026-07-29
+
+**Accepted** — The user approved exposing retry for a persisted pending
+validation before frontend implementation.
+
+---
+
+## 2026-07-29 — Entry 0020
+
+### Initial prompt
+
+> agree apply that fix first
+
+### AI response
+
+> Fixed the pending-validation recovery gap.
+>
+> A session snapshot with `validation.status = pending` now includes:
+>
+> ```text
+> retry_validation
+> ```
+>
+> in `allowedActions`. This means a browser reload or API restart can recover from a persisted pending state by safely retrying validation. During a validation request that the current browser initiated, the frontend should still temporarily disable the Retry button using its local TanStack Query mutation state.
+>
+> Added a regression test that:
+>
+> 1. creates a session and saves credentials;
+> 2. persists a pending validation state;
+> 3. reloads the session through the API; and
+> 4. verifies that `retry_validation` is returned.
+>
+> Verification passed:
+>
+> - API TypeScript strict build: passed.
+> - API tests: **13 passed**.
+> - Shared-contract build and tests remain valid.
+
+### Decision
+
+**Accepted** — Pending validation is now recoverable through the authoritative
+session action list.
+
+---
+
+## 2026-07-29 — Entry 0021
+
+### Initial prompt
+
+> Before start with the frontend files, could you help me to know how is the case handled where the user enters their credentials, proceeds to validation, and then decides to change the credentials afterward?
+
+### AI response
+
+> This case is supported from every non-completed state. The important rule is: **changing `providerAccountId` or `providerApiKey` invalidates the previous Provider result immediately**.
+>
+> ## Normal flow after validation
+>
+> Suppose the user saves credentials and validation succeeds:
+>
+> ```text
+> credentials_version = 1
+> validation_credentials_version = 1
+> status = READY_TO_GO_LIVE
+> validation_status = valid
+> ```
+>
+> The frontend can still show **Edit details/credentials** because `save_details` remains in `allowedActions`. If the user submits a changed `accountId` or API key, the backend performs one atomic update:
+>
+> ```text
+> credentials_version = 2
+> validation_credentials_version = NULL
+> status = READY_TO_VALIDATE
+> validation_status = not_started
+> validation_reason = NULL
+> validation_warnings = []
+> provider_items = []
+> partial_accepted_at = NULL
+> ```
+>
+> The wizard returns to Validate Integration. The old items and result cannot be used for go-live.
+>
+> This applies whether the previous result was:
+>
+> - valid;
+> - partial, accepted or unaccepted;
+> - invalid; or
+> - unavailable.
+>
+> ## Editing only the company name
+>
+> A company-name-only edit does **not** invalidate validation:
+>
+> - send the existing `providerAccountId`;
+> - omit `providerApiKey`; and
+> - send the new `companyName`.
+>
+> The backend retains the saved write-only API key and preserves the current validation state. The form should show an empty API-key input with text such as “Leave blank to keep the saved key,” based on `hasProviderApiKey = true`.
+>
+> If `providerAccountId` changes while the API key is omitted, the backend retains the existing API key but still increments the credential version and requires validation again.
+>
+> ## Changing credentials while validation is in flight
+>
+> This can happen from another browser tab or if the UI permits editing while the validation HTTP request is pending:
+>
+> 1. Validation captures `credentials_version = 1` and `validation_attempt = 1`.
+> 2. The Provider HTTP call starts.
+> 3. The user saves new credentials.
+> 4. The backend increments `credentials_version` to `2` and resets validation.
+> 5. The old Provider response arrives.
+> 6. Its conditional database update requires version `1` and attempt `1`, so it updates zero rows and is discarded.
+> 7. The old validation request returns `409 STALE_VALIDATION_RESULT`.
+>
+> The frontend should handle that `409` by refetching the session. It will receive the new credentials state:
+>
+> ```text
+> READY_TO_VALIDATE / not_started
+> ```
+>
+> It should not show the stale Provider response as an error that needs manual recovery.
+>
+> ## Frontend interaction
+>
+> On Validation and Review screens:
+>
+> 1. Show an **Edit details** action.
+> 2. Return to the Details form with company name and account ID populated.
+> 3. Keep the API-key field empty because the secret is never returned.
+> 4. Explain that leaving it blank retains the saved key.
+> 5. After saving changed credentials, replace the entire cached session with the API response.
+> 6. Render the server-provided `currentStep`, which will be `validation` for changed Provider credentials.
+>
+> After a session reaches `COMPLETED`, credential edits are forbidden and return `409`; completion is terminal.
+
+### Decision
+
+**Pending** — The existing credential-change behavior is documented for
+frontend implementation; awaiting confirmation of the intended UX.

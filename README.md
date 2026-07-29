@@ -56,6 +56,40 @@ docker compose ps
 The `postgres` service should report `healthy` and expose PostgreSQL on local
 port `5432`.
 
+## Session identity
+
+The first version assumes one trusted partner and does not implement
+authentication. The API uses the hardcoded identity `trusted-partner` when
+handling:
+
+```http
+POST /api/onboarding/sessions
+```
+
+The identity is stored in `onboarding_sessions.partner_key` with a unique
+database index. Repeating the request performs an atomic create-or-resume
+operation and returns the same onboarding session, including after API or
+database restarts.
+
+### Future improvement: multiple sessions and partners
+
+Multi-partner or multi-session support is intentionally deferred. A future
+version should:
+
+- replace the configured hardcoded key with an authenticated partner identity;
+- decide whether each partner may have one active session or multiple sessions;
+- scope every session read and mutation by both session ID and authenticated
+  partner ID;
+- use a partial unique index if only one non-completed session is allowed per
+  partner;
+- add an explicit endpoint for starting another onboarding attempt; and
+- add authorization and isolation tests proving one partner cannot access
+  another partner's sessions.
+
+The onboarding state machine and Provider integration do not need to change for
+that feature; only session ownership and creation/resume selection need to
+expand.
+
 ## Mock Provider contract
 
 The Mock Provider runs as an HTTP route in the API server. The onboarding

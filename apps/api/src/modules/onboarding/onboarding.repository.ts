@@ -33,9 +33,11 @@ export type GoLiveResult =
 export class OnboardingRepository {
   constructor(private readonly client: PrismaClient) {}
 
-  create(): Promise<SessionWithPartner> {
-    return this.client.onboardingSession.create({
-      data: {},
+  createOrResume(partnerKey: string): Promise<SessionWithPartner> {
+    return this.client.onboardingSession.upsert({
+      where: { partnerKey },
+      update: {},
+      create: { partnerKey },
       include: { partner: true },
     });
   }

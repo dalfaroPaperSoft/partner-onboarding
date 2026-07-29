@@ -17,10 +17,13 @@ export class OnboardingService {
   constructor(
     private readonly repository: OnboardingRepository,
     private readonly providerClient: ProviderClient,
+    private readonly trustedPartnerKey: string,
   ) {}
 
   async createSession(): Promise<OnboardingSession> {
-    return toSessionResponse(await this.repository.create());
+    return toSessionResponse(
+      await this.repository.createOrResume(this.trustedPartnerKey),
+    );
   }
 
   async getSession(id: string): Promise<OnboardingSession> {
