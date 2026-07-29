@@ -1777,3 +1777,246 @@ session action list.
 
 **Pending** — The existing credential-change behavior is documented for
 frontend implementation; awaiting confirmation of the intended UX.
+
+### Decision update — 2026-07-29
+
+**Accepted** — The user approved the credential-editing and stale-validation
+recovery behavior for frontend implementation.
+
+---
+
+## 2026-07-29 — Entry 0022
+
+### Initial prompt
+
+> ok, sounds good, continue now with frontend, take in cosideration all rules propused so far and paths/workflow and create the needed pages, components. We can validate it after that
+
+### AI response
+
+> Implemented the React frontend wizard in `apps/web`.
+>
+> The frontend includes:
+>
+> - Vite, React, TypeScript, TanStack Query, React Hook Form, Zod, and React Testing Library configuration;
+> - a typed API client that validates successful and error responses;
+> - create/resume session loading as the application entry point;
+> - server-driven progress and navigation;
+> - Details, Validation, Review, and Complete views;
+> - reusable progress, alert, item-list, and screen-state components;
+> - write-only API-key handling with “leave blank to retain” editing behavior;
+> - pending, valid, partial, invalid, and unavailable Provider presentation;
+> - explicit partial-warning acceptance;
+> - Provider retry and persisted-pending recovery;
+> - credential editing from Validation and Review;
+> - stale validation `409` recovery by refetching the authoritative session;
+> - ambiguous go-live recovery by refetching before offering a safe retry;
+> - terminal completed-session resume; and
+> - responsive, accessible styling with explicit form labels and clear status feedback.
+>
+> The Vite development server proxies `/api` to `http://127.0.0.1:3000`, so the browser does not require separate CORS configuration.
+>
+> Added five frontend tests covering:
+>
+> 1. initial details submission and server-driven advancement;
+> 2. unavailable Provider retry presentation;
+> 3. partial-result acceptance and advancement to Review;
+> 4. credential editing without exposing the saved API key; and
+> 5. direct resume to the completed terminal screen.
+>
+> Verification passed:
+>
+> - Frontend TypeScript strict typecheck: passed.
+> - React Testing Library/Vitest: **5 tests passed**.
+> - Vite production build: passed.
+> - Production bundle: 158 modules, approximately 320 KB JavaScript before gzip and 96 KB after gzip.
+>
+> The README now contains complete local startup and verification instructions for PostgreSQL, the API, and the frontend. Start the UI with:
+>
+> ```bash
+> cd apps/web
+> npm run dev
+> ```
+>
+> Then open `http://127.0.0.1:5173`.
+>
+> The frontend dependency install reports two npm advisories (one high and one critical). I did not force potentially breaking dependency upgrades. The implementation is ready for the planned manual validation pass.
+
+### Decision
+
+**Accepted** — The frontend wizard, workflow components, recovery behavior, and
+focused tests were implemented and production-build verified.
+
+---
+
+## 2026-07-29 — Entry 0023
+
+### Initial prompt
+
+> could you show me what are the two npm advisories (one high and one critical)?
+
+### AI response
+
+> I need your explicit approval to send the frontend dependency metadata from `apps/web/package-lock.json` to npm’s advisory service. That lookup is required to retrieve the exact advisory IDs, affected dependency paths, vulnerable ranges, and recommended fixes.
+>
+> Do you approve running `npm audit` against npm’s advisory service? I’ll only inspect and report the results; I won’t install upgrades or modify dependencies.
+
+### Decision
+
+**Pending** — The advisory lookup requires explicit approval to disclose the
+frontend dependency metadata to npm.
+
+### Decision update — 2026-07-29
+
+**Accepted** — The user explicitly approved running the read-only npm advisory
+lookup.
+
+---
+
+## 2026-07-29 — Entry 0024
+
+### Initial prompt
+
+> yes ran it
+
+### AI response
+
+> The audit reports **two vulnerable direct development dependencies**, not exactly two individual security notices:
+>
+> | Package | Installed | Severity | Safe update reported by npm |
+> | --- | --- | --- | --- |
+> | `vite` | `7.1.3` | High | `7.3.6` |
+> | `vitest` | `3.2.4` | Critical | `3.2.7` |
+>
+> Both fixes are within the existing major versions, so npm marks them as non-breaking semver updates.
+>
+> **Critical — Vitest**
+>
+> [GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp): when the Vitest UI server is listening, an unauthenticated attacker may read and execute arbitrary files. It affects Vitest versions below `3.2.6` and has a CVSS score of 9.8.
+>
+> Our installed `3.2.4` is affected. npm recommends `3.2.7`.
+>
+> **High — Vite**
+>
+> npm groups several Vite notices under one high-severity package finding. The highest-impact ones reported are:
+>
+> - [GHSA-v2wj-q39q-566r](https://github.com/advisories/GHSA-v2wj-q39q-566r): `server.fs.deny` can be bypassed with query strings.
+> - [GHSA-p9ff-h696-f583](https://github.com/advisories/GHSA-p9ff-h696-f583): arbitrary file reads through the Vite development-server WebSocket.
+> - [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff): Windows alternate-path bypass of `server.fs.deny`, CVSS 7.5.
+>
+> The Vite finding also contains five lower-severity path traversal, file exposure, and Windows path-handling notices. Our installed `7.1.3` is affected; npm recommends `7.3.6`.
+>
+> These packages are development tooling rather than code included as server-side production dependencies. The practical risk is primarily exposing Vite or Vitest development/UI servers to untrusted networks. Updating both is still recommended.
+>
+> No packages were modified.
+
+### Decision
+
+**Pending** — The advisories were identified and safe-version recommendations
+were reported; no dependency upgrades were authorized or applied.
+
+### Decision update — 2026-07-29
+
+**Accepted** — The user approved applying both recommended frontend dependency
+upgrades.
+
+---
+
+## 2026-07-29 — Entry 0025
+
+### Initial prompt
+
+> ok lets apply the upgrades
+
+### AI response
+
+> Applied the approved frontend security upgrades:
+>
+> - `vite`: `7.1.3 → 7.3.6`
+> - `vitest`: `3.2.4 → 3.2.7`
+>
+> Updated `apps/web/package.json` and its lockfile. Both changes remain within their existing major versions.
+>
+> Verification passed:
+>
+> - `npm audit`: **0 vulnerabilities**
+> - Frontend tests: **5 passed**
+> - TypeScript typecheck: passed
+> - Vite production build: passed
+> - Production bundle: approximately 319 KB JavaScript before gzip and 96 KB after gzip
+>
+> No application code changes were required.
+
+### Decision
+
+**Accepted** — Both frontend advisories were remediated with verified
+non-major dependency upgrades.
+
+---
+
+## 2026-07-29 — Entry 0026
+
+### Initial prompt
+
+> Im seeing the first step page and notice that the ProgressSteps has a css problem the labels for each step needs to be moved a little bit up to avoid overlap the line between each step
+
+### AI response
+
+> Fixed the progress-step label overlap.
+>
+> On desktop, each label now:
+>
+> - sits `8px` above its previous position;
+> - has a small background and horizontal padding so the connector line cannot show through the text.
+>
+> The mobile layout keeps its original stacked positioning because its labels already sit below the numbered circles without intersecting the line.
+>
+> The frontend production build passes with the updated CSS.
+
+### Decision
+
+**Accepted** — The progress labels were repositioned to avoid the connector-line
+overlap.
+
+---
+
+## 2026-07-29 — Entry 0027
+
+### Initial prompt
+
+> Now, for the latest step, we need to remove the extra line, i mean after the Step #3's circle the connetion line is continue, we need to finish it on step #3 
+
+### AI response
+
+> Fixed the progress connector.
+>
+> The line now starts at the outer edge of the Step 1 circle and ends at the outer edge of the Step 3 circle. It no longer continues past the final step.
+>
+> The frontend typecheck and production build pass with the updated positioning.
+
+### Decision
+
+**Accepted** — The connector line was shortened to terminate at the final
+progress circle.
+
+---
+
+## 2026-07-29 — Entry 0028
+
+### Initial prompt
+
+> Remove this label "**For the mock, try valid\_key, partial\_key, or invalid\_key.**" and be sure documented it on the readme file
+
+### AI response
+
+> Removed the mock API-key hint from the partner-facing Details form.
+>
+> The deterministic keys remain documented in the README under **Mock Provider contract → API-key scenarios**, including `valid_key`, `partial_key`, `invalid_key`, `unavailable_key`, `timeout_key`, and `flaky_key`.
+>
+> I also clarified in the README that these values are development/testing fixtures and are intentionally not displayed in the partner-facing UI.
+>
+> Frontend typecheck, tests, and production build all pass.
+
+### Decision
+
+**Accepted** — Mock credentials were removed from the UI and retained as
+developer-only README documentation.

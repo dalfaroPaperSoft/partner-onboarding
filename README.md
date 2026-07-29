@@ -90,6 +90,56 @@ The onboarding state machine and Provider integration do not need to change for
 that feature; only session ownership and creation/resume selection need to
 expand.
 
+## Local development
+
+Run PostgreSQL, the API, and the frontend in separate terminals.
+
+1. Start PostgreSQL from the repository root:
+
+   ```bash
+   docker compose up -d postgres
+   ```
+
+2. Install, migrate, and start the API:
+
+   ```bash
+   cd apps/api
+   npm install
+   npm run db:migrate
+   npm run db:generate
+   npm run start
+   ```
+
+   The API listens on `http://127.0.0.1:3000`.
+
+3. Install and start the frontend:
+
+   ```bash
+   cd apps/web
+   npm install
+   npm run dev
+   ```
+
+   Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local API,
+   so no browser CORS configuration is needed.
+
+Useful verification commands:
+
+```bash
+cd apps/api
+npm run build
+npm test
+
+cd ../web
+npm run build
+npm test
+```
+
+The session is intentionally resumable and `COMPLETED` is terminal. To manually
+exercise another Provider path after completing onboarding, use a fresh local
+database or intentionally reset the local development data before starting
+again.
+
 ## Mock Provider contract
 
 The Mock Provider runs as an HTTP route in the API server. The onboarding
@@ -114,6 +164,9 @@ Rules:
   to the requested Provider account.
 
 ### API-key scenarios
+
+These keys are development and testing fixtures. They are documented here for
+developers and are intentionally not displayed in the partner-facing form.
 
 | API key | HTTP behavior | Provider result |
 | --- | --- | --- |
