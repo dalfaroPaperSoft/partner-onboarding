@@ -2505,3 +2505,43 @@ were appended to the README.
 
 **Accepted** — Test commands and coverage intent were promoted into a visible
 top-level README section.
+
+---
+
+## 2026-07-29 — Entry 0039
+
+### Initial prompt
+
+> Could you check the documention on Readme to see if all is ok to clone and install a project from scratch to use it and run it without problem in another computer?
+
+### AI response
+
+> Audited and updated the README for a fresh installation on another computer.
+>
+> The main blocker was the environment-file location: Prisma commands run from `apps/api`, so the root `.env.example` must be copied to `apps/api/.env`. That step is now explicit.
+>
+> The README now includes:
+>
+> - Git, Node.js `v24.16.0`, and Docker Desktop prerequisites;
+> - repository clone and project-directory commands;
+> - macOS/Linux/Git Bash and Windows PowerShell environment-copy commands;
+> - a complete `.env.example` with database, API port, Provider timeout, and trusted-partner settings;
+> - reproducible `npm ci` installation for contracts, API, and frontend;
+> - PostgreSQL startup and health verification;
+> - Prisma migration and client-generation commands;
+> - separate API and frontend startup terminals;
+> - expected URLs and required ports;
+> - test and build commands for all packages; and
+> - troubleshooting for Docker, missing `DATABASE_URL`, PostgreSQL readiness, stale API processes, and PowerShell execution policy.
+>
+> I also removed an outdated Mock Provider statement implying timeout and flaky scenarios might not be implemented; all six scenarios are implemented.
+>
+> The documented commands match the current package scripts, Compose configuration, migrations, and environment schema. The API, frontend, and contracts builds and 32 tests already pass with this setup.
+>
+> One value remains intentionally project-specific: replace `<repository-url>` in the clone command with the final Git hosting URL.
+
+### Decision
+
+**Accepted** — Fresh-clone documentation gaps were corrected and the setup
+instructions now cover installation, configuration, startup, verification, and
+common failures.

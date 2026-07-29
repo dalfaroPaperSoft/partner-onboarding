@@ -31,6 +31,14 @@ keeping setup and framework overhead appropriate for a 4–6 hour exercise.
 
 ## Prerequisites
 
+### Git
+
+Git is required to clone the repository:
+
+```bash
+git --version
+```
+
 ### Node.js
 
 This project uses **Node.js `v24.16.0`**. Use this exact version to keep local
@@ -145,39 +153,127 @@ normal rule that `COMPLETED` is terminal by explicitly deleting the test
 Partner and resetting its session. It should be removed or protected by an
 environment/authorization guard before any production deployment.
 
-## Local development
+## Getting started from a fresh clone
 
-Run PostgreSQL, the API, and the frontend in separate terminals.
+The repository uses three small npm packages rather than a root workspace
+installer. Run the following commands from the paths shown.
 
-1. Start PostgreSQL from the repository root:
+### 1. Clone the repository
 
-   ```bash
-   docker compose up -d postgres
-   ```
+```bash
+git clone <repository-url>
+cd partner-onboarding
+```
 
-2. Install, migrate, and start the API:
+Replace `<repository-url>` with the URL supplied for this project.
 
-   ```bash
-   cd apps/api
-   npm install
-   npm run db:migrate
-   npm run db:generate
-   npm run dev
-   ```
+### 2. Create the API environment file
 
-   The API listens on `http://127.0.0.1:3000`. The development command watches
-   backend source files and restarts the process when routes or services change.
+Prisma commands run from `apps/api`, so the environment file must exist in that
+directory. Copy the committed example:
 
-3. Install and start the frontend:
+macOS, Linux, or Git Bash:
 
-   ```bash
-   cd apps/web
-   npm install
-   npm run dev
-   ```
+```bash
+cp .env.example apps/api/.env
+```
 
-   Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local API,
-   so no browser CORS configuration is needed.
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example apps/api/.env
+```
+
+The default values match `docker-compose.yml`. No secrets or external Provider
+configuration are required for the local mock.
+
+### 3. Install dependencies
+
+Use `npm ci` for a reproducible install from each committed lockfile:
+
+```bash
+cd packages/contracts
+npm ci
+
+cd ../../apps/api
+npm ci
+
+cd ../web
+npm ci
+
+cd ../..
+```
+
+### 4. Start PostgreSQL
+
+Make sure Docker Desktop is running, then start the database from the repository
+root:
+
+```bash
+docker compose up -d postgres
+docker compose ps
+```
+
+Wait until the `postgres` service reports `healthy`.
+
+### 5. Apply migrations and generate Prisma Client
+
+```bash
+cd apps/api
+npm run db:migrate
+npm run db:generate
+```
+
+The migration command creates the schema in the PostgreSQL container and records
+both migrations in Prisma's migration history.
+
+### 6. Start the API
+
+From `apps/api`:
+
+```bash
+npm run dev
+```
+
+The API listens on `http://127.0.0.1:3000`. Keep this terminal running. The
+development command watches backend source files and restarts the process when
+routes or services change.
+
+### 7. Start the frontend
+
+In a second terminal:
+
+```bash
+cd apps/web
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local API, so
+no browser CORS configuration is needed.
+
+### Local ports
+
+| Service | Port |
+| --- | --- |
+| PostgreSQL | `5432` |
+| Express API | `3000` |
+| Vite frontend | `5173` |
+
+All three ports must be available. If one is already in use, stop the conflicting
+local service before starting this project.
+
+### Common setup issues
+
+- **Docker connection error:** start Docker Desktop and wait for its engine to
+  become ready.
+- **Prisma cannot find `DATABASE_URL`:** confirm that `apps/api/.env` exists,
+  not only the root `.env.example`.
+- **PostgreSQL connection refused:** run `docker compose ps` and wait for the
+  database health check.
+- **A newly added API route returns `ROUTE_NOT_FOUND`:** restart the API with
+  `npm run dev`; do not use an older process started before the route existed.
+- **PowerShell blocks `npm.ps1`:** use `npm.cmd` in place of `npm` for the same
+  commands.
 
 ## Tests
 
@@ -270,9 +366,7 @@ developers and are intentionally not displayed in the partner-facing form.
 | `flaky_key` | First call returns `503`; later calls return `200` valid | Demonstrates a successful retry |
 | Missing or unknown key | `200` immediately | Same result as `invalid_key` |
 
-The minimum implementation should prioritize `valid_key`, `partial_key`,
-`invalid_key`, and `unavailable_key`. The timeout and flaky scenarios may be
-added after the core flows work.
+All six documented key scenarios are implemented.
 
 ### Valid response
 
