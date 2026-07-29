@@ -183,6 +183,50 @@ describe("Onboarding API", () => {
     expect(secondGoLive.body.partner.id).toBe(firstGoLive.body.partner.id);
   });
 
+  it("resets the same session and removes its activated partner", async () => {
+    const sessionId = await createSession();
+    await saveDetails(sessionId, "valid_key");
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/validation`)
+      .expect(200);
+    await api()
+      .post(`/api/onboarding/sessions/${sessionId}/go-live`)
+      .expect(200);
+
+    const reset = await api()
+      .post(`/api/onboarding/sessions/${sessionId}/reset`)
+      .expect(200);
+
+    expect(reset.body).toMatchObject({
+      id: sessionId,
+      status: "DETAILS_REQUIRED",
+      currentStep: "details",
+      details: {
+        companyName: null,
+        providerAccountId: null,
+        hasProviderApiKey: false,
+      },
+      validation: {
+        status: "not_started",
+        items: [],
+        warnings: [],
+        reason: null,
+        partialAcceptedAt: null,
+      },
+      completedAt: null,
+    });
+    expect(
+      await prisma.partner.count({
+        where: { onboardingSessionId: sessionId },
+      }),
+    ).toBe(0);
+
+    const resumed = await api()
+      .post("/api/onboarding/sessions")
+      .expect(200);
+    expect(resumed.body.id).toBe(sessionId);
+  });
+
   it("requires explicit acceptance for a partial result", async () => {
     const sessionId = await createSession();
     await saveDetails(sessionId, "partial_key");

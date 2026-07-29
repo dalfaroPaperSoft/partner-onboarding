@@ -2020,3 +2020,225 @@ progress circle.
 
 **Accepted** — Mock credentials were removed from the UI and retained as
 developer-only README documentation.
+
+---
+
+## 2026-07-29 — Entry 0029
+
+### Initial prompt
+
+> For testing purposes only, could we add a "Reset Session" option in the header? Instead of creating a new onboarding session, it should reset the current one by clearing all relevant data and restoring it to its initial state in the database. This ensures there is always a single onboarding session, and after the reset, the application behaves exactly as it does on a fresh start.
+
+### AI response
+
+> Implemented the testing-only **Reset session** feature.
+>
+> The header now includes a Reset session button with a confirmation prompt. It calls:
+>
+> ```text
+> POST /api/onboarding/sessions/:sessionId/reset
+> ```
+>
+> The backend performs the reset in one row-locked database transaction:
+>
+> - preserves the existing session ID and `trusted-partner` identity;
+> - deletes any linked activated Partner;
+> - clears company name, Provider account ID, and API key;
+> - clears items, warnings, validation reason, and partial acceptance;
+> - restores `DETAILS_REQUIRED / not_started`;
+> - clears `completed_at`;
+> - increments internal credential and validation counters so in-flight Provider responses become stale; and
+> - returns the same session as a fresh Details-step snapshot.
+>
+> The frontend replaces the TanStack Query cache with that response and remounts the Details form, preventing previous form values from remaining visible. Repeating create/resume continues to return the same reset session rather than creating another row.
+>
+> The README documents the endpoint, transaction behavior, concurrency protection, and that this convenience must be removed or guarded before production.
+>
+> Verification passed:
+>
+> - API strict typecheck and **14 tests** passed.
+> - Frontend strict typecheck and **6 tests** passed.
+> - Shared contracts build and **4 tests** passed.
+> - Vite production build passed.
+>
+> The backend regression test completes an onboarding session, confirms activation, resets it, verifies the Partner was deleted, checks every public field returned to its initial state, and confirms create/resume returns the same session ID.
+
+### Decision
+
+**Accepted** — A transactional, same-session testing reset was implemented,
+documented, and verified across backend, frontend, and shared contracts.
+
+---
+
+## 2026-07-29 — Entry 0030
+
+### Initial prompt
+
+> received an error, {"error":{"code":"ROUTE_NOT_FOUND","message":"Route not found"}} include the new route
+
+### AI response
+
+> The reset route is included in the API:
+>
+> ```text
+> POST /api/onboarding/sessions/:sessionId/reset
+> ```
+>
+> The frontend also calls that exact path with `POST`. The `ROUTE_NOT_FOUND` response is from an API process that was started before the route was added—or from opening the URL directly in a browser, which sends `GET`.
+>
+> Restart the backend:
+>
+> ```bash
+> # Stop the current API with Ctrl+C
+> cd apps/api
+> npm run dev
+> ```
+>
+> Then retry the header button. Do not navigate directly to the reset URL; it is intentionally a POST command.
+>
+> I updated the README to use `npm run dev` for local API development. That command watches backend files and automatically restarts when routes or services change.
+>
+> The route itself is mounted under `/api/onboarding`, connected to `controller.resetSession`, and covered by the passing reset integration test.
+
+### Decision
+
+**Accepted** — The route was verified as present; development startup guidance
+was changed to watch mode so the running API picks up route changes.
+
+---
+
+## 2026-07-29 — Entry 0031
+
+### Initial prompt
+
+> i will continue with manual testing, in a meantime, lets verify the test status:
+>
+> based on:
+>
+> meaningful tests on the parts that matter (state machine, validation failure modes, the wizard flow), not coverage farming.
+> **Tests** that run, with a one-line note in the README on how to run them.
+>
+> Lets check first what tests needs to be included
+
+### AI response
+
+> The current suite has a strong foundation, but it needs a few targeted additions before it fully demonstrates the risky requirements.
+>
+> ## Current coverage
+>
+> **API: 14 passing tests**
+>
+> Already covered:
+>
+> - all deterministic Provider keys;
+> - unknown keys mapping to invalid;
+> - HTTP `503`, timeout, and flaky retry behavior;
+> - one trusted-partner session;
+> - valid validation and sequential duplicate go-live;
+> - partial result blocked until acceptance;
+> - invalid and unavailable state mapping;
+> - persisted-pending reload recovery;
+> - testing reset and linked Partner deletion; and
+> - API-key omission from session responses.
+>
+> **Frontend: 6 passing tests**
+>
+> Already covered:
+>
+> - Details submission and server-driven advancement;
+> - unavailable Provider retry presentation;
+> - partial acceptance and advancement;
+> - editing credentials without exposing the saved key;
+> - completed-session resume; and
+> - header reset.
+>
+> **Shared contracts: 4 passing tests**
+>
+> Already covered:
+>
+> - valid, partial, and invalid Provider payloads;
+> - invalid partial payloads without warnings;
+> - optional API key when retaining saved credentials; and
+> - rejection of leaked API keys in response snapshots.
+>
+> ## Must-add tests
+>
+> These provide the most value and directly exercise the main technical risks.
+>
+> ### Backend/state machine
+>
+> 1. **Credential changes invalidate successful validation**
+>    - Reach `READY_TO_GO_LIVE`.
+>    - Change `accountId` or API key.
+>    - Assert `READY_TO_VALIDATE / not_started`.
+>    - Assert items, warnings, reason, acceptance, and validation credential version are cleared.
+>    - Assert the credential version increased.
+>
+> 2. **A stale in-flight Provider response cannot overwrite changed credentials**
+>    - Start delayed validation.
+>    - Change credentials while the request is pending.
+>    - Let the old response complete.
+>    - Assert it returns `409 STALE_VALIDATION_RESULT`.
+>    - Assert the database still contains the new credentials and reset validation state.
+>
+> 3. **Retry replaces results without duplicates**
+>    - Validate using `flaky_key` and receive unavailable.
+>    - Retry and receive valid.
+>    - Assert the final item array contains the expected unique items exactly once.
+>
+> 4. **Concurrent go-live remains idempotent**
+>    - Fire two go-live requests concurrently rather than sequentially.
+>    - Assert both return the same Partner.
+>    - Assert the database contains one Partner and one completed session.
+>
+> 5. **Terminal and guard transitions are rejected**
+>    - Validate before details: `409`.
+>    - Accept warnings for a non-partial result: `409`.
+>    - Modify or validate a completed session: `409`.
+>    - Confirm state remains unchanged after every rejection.
+>
+> ### Frontend wizard
+>
+> 6. **Complete valid wizard flow**
+>    - Details → validate → review → go live → completion.
+>    - Assert every screen transition comes from API responses.
+>
+> 7. **Invalid credentials recovery**
+>    - Render invalid reason.
+>    - Edit credentials.
+>    - Save replacement values.
+>    - Assert the wizard returns to validation and permits another check.
+>
+> 8. **Persisted pending recovery**
+>    - Load a `pending` session.
+>    - Assert Retry is visible.
+>    - Retry and render the returned result.
+>
+> ## Valuable if time remains
+>
+> - A stale-validation `409` frontend test proving the UI refetches instead of displaying a terminal error.
+> - An ambiguous go-live network-error test proving a completed refetch is treated as success.
+> - Company-name-only editing preserves a valid Provider result.
+> - Repeated partial acceptance returns the same accepted state.
+> - Request validation tests for missing initial API key and malformed session IDs.
+>
+> I would not add tests for individual presentational components, CSS classes, every getter, or every enum value. Those would increase count without proving workflow safety.
+>
+> ## README status
+>
+> The README currently shows how to run API and frontend tests, but it omits the shared-contract suite. The final concise instructions should include:
+>
+> ```bash
+> cd apps/api && npm test
+> cd apps/web && npm test
+> cd packages/contracts && npm test
+> ```
+>
+> It should also state in one line that API tests require the PostgreSQL Compose service to be running.
+>
+> The best next step is to implement the eight must-add tests above. Together with the existing suite, they demonstrate the state machine, Provider failure handling, concurrency/idempotency, resumability, and the full wizard without coverage farming.
+
+### Decision
+
+**Pending** — The focused test-gap analysis is ready; no new tests or README
+changes were requested yet.

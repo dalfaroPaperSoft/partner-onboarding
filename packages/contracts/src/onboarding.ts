@@ -81,6 +81,9 @@ export type ValidateIntegrationResponse = OnboardingSession;
 export const AcceptPartialResponseSchema = OnboardingSessionSchema;
 export type AcceptPartialResponse = OnboardingSession;
 
+export const ResetSessionResponseSchema = OnboardingSessionSchema;
+export type ResetSessionResponse = OnboardingSession;
+
 export const PartnerSchema = z
   .object({
     id: z.string().uuid(),

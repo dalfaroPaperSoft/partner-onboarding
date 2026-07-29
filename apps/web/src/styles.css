@@ -85,6 +85,32 @@ button:disabled {
   color: var(--muted);
 }
 
+.site-header__actions,
+.reset-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.reset-action__error {
+  max-width: 240px;
+  color: var(--error);
+  font-size: 0.75rem;
+}
+
+.button--header {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-color: #f0c0c0;
+  color: var(--error);
+  background: white;
+  font-size: 0.8rem;
+}
+
+.button--header:not(:disabled):hover {
+  background: var(--error-soft);
+}
+
 .main-content {
   width: min(860px, calc(100% - 40px));
   margin: 0 auto;
@@ -491,6 +517,10 @@ button:disabled {
   }
 
   .site-header__meta {
+    display: none;
+  }
+
+  .reset-action__error {
     display: none;
   }
 

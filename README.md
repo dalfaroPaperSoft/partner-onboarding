@@ -90,6 +90,35 @@ The onboarding state machine and Provider integration do not need to change for
 that feature; only session ownership and creation/resume selection need to
 expand.
 
+## Testing-only session reset
+
+The header includes a **Reset session** action for repeated local testing. After
+confirmation, it calls:
+
+```http
+POST /api/onboarding/sessions/:sessionId/reset
+```
+
+The reset runs in one database transaction and:
+
+- keeps the same `onboarding_sessions` row, ID, and trusted partner identity;
+- removes any linked row from `partners`;
+- clears company details and Provider credentials;
+- clears Provider items, warnings, reasons, and partial acceptance;
+- restores `DETAILS_REQUIRED / not_started`;
+- clears completion timestamps; and
+- advances internal credential and validation counters so an in-flight Provider
+  response cannot repopulate the reset session.
+
+After the response, the frontend replaces its cached session and renders the
+same empty Details form shown on a fresh start. Repeating create/resume still
+returns this one session.
+
+This command is intentionally a local testing convenience. It bypasses the
+normal rule that `COMPLETED` is terminal by explicitly deleting the test
+Partner and resetting its session. It should be removed or protected by an
+environment/authorization guard before any production deployment.
+
 ## Local development
 
 Run PostgreSQL, the API, and the frontend in separate terminals.
@@ -107,10 +136,11 @@ Run PostgreSQL, the API, and the frontend in separate terminals.
    npm install
    npm run db:migrate
    npm run db:generate
-   npm run start
+   npm run dev
    ```
 
-   The API listens on `http://127.0.0.1:3000`.
+   The API listens on `http://127.0.0.1:3000`. The development command watches
+   backend source files and restarts the process when routes or services change.
 
 3. Install and start the frontend:
 

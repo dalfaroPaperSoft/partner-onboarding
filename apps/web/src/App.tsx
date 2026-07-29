@@ -1,4 +1,5 @@
 import { OnboardingWizard } from "./features/onboarding/OnboardingWizard";
+import { ResetSessionButton } from "./features/onboarding/components/ResetSessionButton";
 
 export function App() {
   return (
@@ -8,7 +9,10 @@ export function App() {
           <span className="brand__mark">P</span>
           <span>Partner Portal</span>
         </a>
-        <span className="site-header__meta">Self-service onboarding</span>
+        <div className="site-header__actions">
+          <span className="site-header__meta">Self-service onboarding</span>
+          <ResetSessionButton />
+        </div>
       </header>
 
       <main className="main-content">

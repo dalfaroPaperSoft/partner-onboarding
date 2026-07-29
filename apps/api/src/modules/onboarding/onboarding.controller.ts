@@ -43,6 +43,14 @@ export class OnboardingController {
     response.json(await this.service.acceptPartial(sessionId));
   };
 
+  resetSession = async (
+    request: Request,
+    response: Response,
+  ): Promise<void> => {
+    const { sessionId } = SessionIdParamsSchema.parse(request.params);
+    response.json(await this.service.resetSession(sessionId));
+  };
+
   goLive = async (request: Request, response: Response): Promise<void> => {
     const { sessionId } = SessionIdParamsSchema.parse(request.params);
     response.json(await this.service.goLive(sessionId));

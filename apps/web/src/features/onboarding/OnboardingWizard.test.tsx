@@ -17,6 +17,7 @@ const timestamp = "2026-07-29T12:00:00.000Z";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function session(
@@ -272,6 +273,48 @@ describe("Onboarding wizard", () => {
         name: "Example Partner is live",
       }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reset session" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Go live" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resets the existing session from the header", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const completed = session({
+      status: "COMPLETED",
+      currentStep: "complete",
+      validationStatus: "valid",
+      details: {
+        companyName: "Example Partner",
+        providerAccountId: "account-123",
+        hasProviderApiKey: true,
+      },
+      completedAt: timestamp,
+      allowedActions: [],
+    });
+    const reset = session({
+      updatedAt: "2026-07-29T12:05:00.000Z",
+    });
+    const fetchMock = mockResponses(completed, reset);
+
+    renderApp();
+    await user.click(
+      await screen.findByRole("button", { name: "Reset session" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Tell us about your company",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Company name")).toHaveValue("");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `/api/onboarding/sessions/${sessionId}/reset`,
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

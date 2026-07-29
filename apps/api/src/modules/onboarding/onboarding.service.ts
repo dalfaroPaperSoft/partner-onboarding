@@ -154,6 +154,15 @@ export class OnboardingService {
     return toSessionResponse(updated);
   }
 
+  async resetSession(id: string): Promise<OnboardingSession> {
+    const reset = await this.repository.reset(id, this.trustedPartnerKey);
+    if (!reset) {
+      throw new AppError(404, "SESSION_NOT_FOUND", "Session not found");
+    }
+
+    return toSessionResponse(reset);
+  }
+
   async goLive(id: string): Promise<GoLiveResponse> {
     const result = await this.repository.goLive(id);
 

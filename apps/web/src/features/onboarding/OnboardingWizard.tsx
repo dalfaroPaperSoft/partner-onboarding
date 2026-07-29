@@ -42,6 +42,7 @@ export function OnboardingWizard() {
 
       {visibleStep === "details" ? (
         <DetailsStep
+          key={`${session.id}-${session.updatedAt}`}
           session={session}
           canCancel={session.currentStep !== "details"}
           onCancel={() => setEditingDetails(false)}

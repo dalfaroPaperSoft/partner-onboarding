@@ -173,6 +173,52 @@ export class OnboardingRepository {
     return update.count === 0 ? null : this.findById(id);
   }
 
+  reset(
+    id: string,
+    partnerKey: string,
+  ): Promise<SessionWithPartner | null> {
+    return this.client.$transaction(async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT id
+        FROM onboarding_sessions
+        WHERE id = ${id}::uuid
+        FOR UPDATE
+      `;
+
+      const session = await transaction.onboardingSession.findFirst({
+        where: { id, partnerKey },
+      });
+      if (!session) {
+        return null;
+      }
+
+      await transaction.partner.deleteMany({
+        where: { onboardingSessionId: id },
+      });
+
+      return transaction.onboardingSession.update({
+        where: { id },
+        data: {
+          companyName: null,
+          providerAccountId: null,
+          providerApiKey: null,
+          credentialsVersion: { increment: 1 },
+          status: "DETAILS_REQUIRED",
+          validationStatus: "not_started",
+          validationCredentialsVersion: null,
+          validationAttempt: { increment: 1 },
+          validationReason: null,
+          validationWarnings: [],
+          partialAcceptedAt: null,
+          providerItems: [],
+          completedAt: null,
+          updatedAt: new Date(),
+        },
+        include: { partner: true },
+      });
+    });
+  }
+
   goLive(id: string): Promise<GoLiveResult> {
     return this.client.$transaction(async (transaction) => {
       await transaction.$queryRaw`

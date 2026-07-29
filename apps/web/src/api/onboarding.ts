@@ -3,6 +3,7 @@ import {
   CreateOrResumeSessionResponseSchema,
   GetSessionResponseSchema,
   GoLiveResponseSchema,
+  ResetSessionResponseSchema,
   SaveDetailsResponseSchema,
   ValidateIntegrationResponseSchema,
   type GoLiveResponse,
@@ -105,6 +106,22 @@ export function useAcceptPartial(sessionId: string) {
       apiRequest(
         `/api/onboarding/sessions/${sessionId}/accept-partial`,
         AcceptPartialResponseSchema,
+        { method: "POST" },
+      ),
+    onSuccess: (session) => {
+      queryClient.setQueryData(SESSION_QUERY_KEY, session);
+    },
+  });
+}
+
+export function useResetSession(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      apiRequest(
+        `/api/onboarding/sessions/${sessionId}/reset`,
+        ResetSessionResponseSchema,
         { method: "POST" },
       ),
     onSuccess: (session) => {

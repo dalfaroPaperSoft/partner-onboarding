@@ -23,6 +23,10 @@ export function createOnboardingRouter(
     asyncHandler(controller.acceptPartial),
   );
   router.post(
+    "/sessions/:sessionId/reset",
+    asyncHandler(controller.resetSession),
+  );
+  router.post(
     "/sessions/:sessionId/go-live",
     asyncHandler(controller.goLive),
   );
