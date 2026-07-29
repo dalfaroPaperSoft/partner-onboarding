@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model OnboardingSession {
+  id                           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyName                  String?   @map("company_name")
+  providerAccountId            String?   @map("provider_account_id")
+  providerApiKey               String?   @map("provider_api_key")
+  credentialsVersion           Int       @default(0) @map("credentials_version")
+  status                       String    @default("DETAILS_REQUIRED")
+  validationStatus             String    @default("not_started") @map("validation_status")
+  validationCredentialsVersion Int?      @map("validation_credentials_version")
+  validationAttempt            Int       @default(0) @map("validation_attempt")
+  validationReason             String?   @map("validation_reason")
+  validationWarnings           Json      @default("[]") @map("validation_warnings")
+  partialAcceptedAt            DateTime? @map("partial_accepted_at") @db.Timestamptz
+  providerItems                Json      @default("[]") @map("provider_items")
+  createdAt                    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                    DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  completedAt                  DateTime? @map("completed_at") @db.Timestamptz
+  partner                      Partner?
+
+  @@map("onboarding_sessions")
+}
+
+model Partner {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyName         String            @map("company_name")
+  status              String            @default("LIVE")
+  onboardingSessionId String            @unique @map("onboarding_session_id") @db.Uuid
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  onboardingSession   OnboardingSession @relation(fields: [onboardingSessionId], references: [id])
+
+  @@map("partners")
+}

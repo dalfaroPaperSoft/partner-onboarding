@@ -1149,3 +1149,105 @@ and scenarios.
 
 **Accepted** — The requested project structure and PostgreSQL-only local
 Compose configuration were created.
+
+---
+
+## 2026-07-29 — Entry 0013
+
+### Initial prompt
+
+> ok, 
+> - Run our  DB using the compose 
+> - Create the first DB migration (Using the structurea below) and run it 
+>
+> CREATE EXTENSION IF NOT EXISTS pgcrypto;
+>
+> CREATE TABLE onboarding_sessions (
+>   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+>
+>   company_name TEXT,
+>   provider_account_id TEXT,
+>   provider_api_key TEXT,
+>
+>   credentials_version INTEGER NOT NULL DEFAULT 0,
+>
+>   status TEXT NOT NULL DEFAULT 'DETAILS_REQUIRED'
+>     CHECK (status IN (
+>       'DETAILS_REQUIRED',
+>       'READY_TO_VALIDATE',
+>       'INTEGRATION_INVALID',
+>       'INTEGRATION_UNAVAILABLE',
+>       'READY_TO_GO_LIVE',
+>       'READY_TO_GO_LIVE_WITH_WARNINGS',
+>       'COMPLETED'
+>     )),
+>
+>   validation_status TEXT NOT NULL DEFAULT 'not_started'
+>     CHECK (validation_status IN (
+>       'not_started',
+>       'pending',
+>       'valid',
+>       'partial',
+>       'invalid',
+>       'unavailable'
+>     )),
+>
+>   validation_credentials_version INTEGER,
+>   validation_attempt INTEGER NOT NULL DEFAULT 0,
+>   validation_reason TEXT,
+>   validation_warnings JSONB NOT NULL DEFAULT '[]'::jsonb,
+>   partial_accepted_at TIMESTAMPTZ,
+>   provider_items JSONB NOT NULL DEFAULT '[]'::jsonb,
+>
+>   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+>   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+>   completed_at TIMESTAMPTZ
+> );
+>
+> CREATE TABLE partners (
+>   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+>   company_name TEXT NOT NULL,
+>   status TEXT NOT NULL DEFAULT 'LIVE'
+>     CHECK (status = 'LIVE'),
+>   onboarding_session_id UUID NOT NULL UNIQUE
+>     REFERENCES onboarding_sessions(id),
+>   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+> );
+
+### AI response
+
+> PostgreSQL is running and healthy, and the initial Prisma migration has been applied successfully.
+>
+> Created:
+>
+> - `apps/api/prisma/schema.prisma` — Prisma mapping for both tables.
+> - `apps/api/prisma/migrations/20260729000100_init/migration.sql` — the initial SQL migration.
+> - `apps/api/prisma/migrations/migration_lock.toml` — locks migrations to PostgreSQL.
+> - `apps/api/package.json` and lockfile — pinned Prisma `6.16.0` with migration scripts.
+> - `.gitignore` — excludes dependencies, environment files, logs, coverage, and build output.
+>
+> I omitted `READY_TO_GO_LIVE_WITH_WARNINGS` from the database constraint because it was explicitly removed from the final state machine. The allowed session statuses are:
+>
+> ```text
+> DETAILS_REQUIRED
+> READY_TO_VALIDATE
+> INTEGRATION_INVALID
+> INTEGRATION_UNAVAILABLE
+> READY_TO_GO_LIVE
+> COMPLETED
+> ```
+>
+> Verification completed:
+>
+> - Compose service `postgres` is healthy on port `5432`.
+> - Prisma applied `20260729000100_init`.
+> - `prisma migrate status` reports that the schema is up to date.
+> - PostgreSQL contains `_prisma_migrations`, `onboarding_sessions`, and `partners`.
+> - The session-status and validation-status checks, partner foreign key, and unique `onboarding_session_id` constraint are present.
+>
+> The dependency install reported three high-severity npm audit findings. I did not run a forced automated upgrade because that could introduce breaking dependency changes; it should be reviewed separately.
+
+### Decision
+
+**Accepted** — PostgreSQL was started and the first Prisma migration was
+created, applied, and verified against the agreed final state machine.
